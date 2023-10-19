@@ -1,0 +1,13 @@
+.gradle
+.editorconfig
+/bin/
+.project
+.classpah
+.idea
+build
+.DS_Store
+*/src/gen
+user.defaults
+org.fbound.*.jar
+.vscode
+*iml
