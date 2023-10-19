@@ -39,11 +39,6 @@ public class Roster {
 		public List<Membership.Record> memberships = new ArrayList<>();
 	}
 
-	public static class Builder extends RecordBuilder<Roster,Roster> {
-		public Builder(Record record) { super(BuilderOpts.build(record).toValue(Roster::new)); }
-		public Builder() { this(new Record()); }
-	}
-
 	public static class RecordBuilder<V,R> extends BuilderBase<Record,V,R,RecordBuilder<V,R>>
 			implements Accept<RecordBuilder<V,R>>, Apply<RecordBuilder<V,R>>, Edit<Record,RecordBuilder<V,R>> {
 		public RecordBuilder(BuilderOpts<Record,V,R> options) { super(options); }
@@ -64,5 +59,10 @@ public class Roster {
 		public R finalizeRoster(){
 			return super.finalizeInstance();
 		}
+	}
+
+	public static class Builder extends RecordBuilder<Roster,Roster> {
+		public Builder(Record record) { super(BuilderOpts.build(record).toValue(Roster::new)); }
+		public Builder() { this(new Record()); }
 	}
 }
