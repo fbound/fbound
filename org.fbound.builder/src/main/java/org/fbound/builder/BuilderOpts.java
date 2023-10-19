@@ -23,6 +23,14 @@ import java.util.function.Supplier;
  * @author Matt Stevenson [matt@fbound.org]
  *
  * Options needed to construct a Builder with a specific form.
+ * In addition to holding values to set in the BuilderBase, this has a Consumer[BuilderBase] used to set functional references involving the builder itself.
+ * The builder cannot reference itself in the parameters to the super() constructor (in Java 8), only after calling super().
+ * The Consumer is used to set the returnRef to the instanceRef or builtValue for standalone builders, or to set the instanceRef to the builder for a 'classic Effective Builder' where the builder is the record.
+ *
+ * This makes the `FromBuilder` dangerous to use, as it will copy references to another builder instead of re-setting the desired self-reference.
+ * A potential fix for this is to have the BuilderBase hold a BuilderOpts instead of having its own fields, including the 'B self' field.  All references could be setup within the BuilderOpts before creating the Builder eliminating the need for the Consumer.
+ * The downside to this is that each BuilderOpts instance becomes bound to Builder it is used to create.  They would not be re-usable and would need to be cloned instead.
+ *
  * @param <T> Instance Type of record that is modified by the Builder, typically a serializable Record type
  * @param <V> Value Type of final Object constructed from the T record instance
  * @param <R> Return Type of Object returned after final Value construction.  This will typically be V for a standalone Builder, or another Builder Type when chaining Builders.
@@ -82,13 +90,13 @@ public class BuilderOpts<T,V,R> {
 		}
 
 		public <R> BuilderOpts<T,V,T> returnRecord(Consumer<V> consumer){
-			return new BuilderOpts<>(supplier, factory, consumer, null, b -> b.returnRef = b.buildRef);
+			return new BuilderOpts<>(supplier, factory, consumer, null, b -> b.returnRef = b.instanceRef);
 		}
 	}
 
 	public final static class FromBuilder<T,V,R> extends BuilderOpts<T,V,R> {
 		public FromBuilder(BuilderBase<T,V,R,?> builder) {
-			super(builder.buildRef, builder.factory, builder.consumer, builder.returnRef, b -> {});
+			super(builder.instanceRef, builder.factory, builder.consumer, builder.returnRef, b -> {});
 		}
 		private FromBuilder(Supplier<T> supplier, Function<T, V> factory, Consumer<V> consumer, Supplier<R> returnSupplier, Consumer<BuilderBase<T,V,R,?>> builderSetup) {
 			super(supplier, factory, consumer, returnSupplier, builderSetup);
@@ -122,7 +130,7 @@ public class BuilderOpts<T,V,R> {
 	public final static class Other {
 		public static <V, B extends BuilderBase<B,V,V,B>> BuilderOpts<B,V,V> effectiveBuilder(Function<B,V> factory){
 			return new BuilderOpts<>( null, factory, v->{}, null, b -> {
-					b.buildRef = () -> (B)b;
+					b.instanceRef = () -> (B)b;
 					b.returnRef = () -> b.builtValue;
 			});
 		}

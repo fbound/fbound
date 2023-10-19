@@ -31,7 +31,7 @@ public class ExtensionUtils {
 	}
 
 	public static <T,B extends BuilderBase<T, ?, ?, B> & Extension<B>> T instance(Extension<B> extension) {
-		return ((B) extension).buildRef.get();
+		return ((B) extension).instanceRef.get();
 	}
 
 	public static <V,B extends BuilderBase<?, V, ?, B> & Extension<B>> V builtValue(Extension<B> extension) {

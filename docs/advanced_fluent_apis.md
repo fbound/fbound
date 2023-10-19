@@ -7,7 +7,7 @@ Author: Matt Stevenson <matt@pagemodel.org>
 
 This is a guide to Advanced Techniques for Generic Types and their practical use in software engineering.  All code in this guide is written in Java 8, you do not need to upgrade your Java to use these techniques.
 
-It will explore the design and type-parameters used in the FBound `BuilderBase<T,V,R,B extends BuilderBase<? super T,V,R,? super B>>`.  By the end of this guide, if I have done my job, you will understand why these are **fundamental type parameters** for generic classes.  Each with special properties that can combine to make a *more*-generic type with very interesting behaviors.
+It will explore the design and type-parameters used in the FBound `BuilderBase<T,V,R,B extends BuilderBase<T,V,R,? super B>>`.  By the end of this guide, if I have done my job, you will understand why these are **fundamental type parameters** for generic classes.  Each with special properties that can combine to make a *more*-generic type with very interesting behaviors.
 
 We will start with a concrete `UserBuilder` class loosely following the `Effective Builder Pattern` and explore its limitations.  
 Each type parameter will be discussed independently as a means of overcoming a specific limitation of an `Effective Builder`.  

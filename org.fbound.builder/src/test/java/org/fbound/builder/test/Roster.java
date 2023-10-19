@@ -18,7 +18,7 @@ public class Roster {
 	public Roster(Record record) {
 		this.name = record.name;
 		this.facilitator = new Facilitator.Builder(record.facilitator).finalizeUser();
-		this.memberships = record.memberships.stream().map(Membership::new).collect(Collectors.toList());
+		this.memberships = record.memberships.stream().map(r -> new Membership.Builder(r).finalizeMembership()).collect(Collectors.toList());
 	}
 
 	public String getName() {
@@ -44,16 +44,16 @@ public class Roster {
 		public RecordBuilder(BuilderOpts<Record,V,R> options) { super(options); }
 
 		public RecordBuilder<V,R> setName(String name) {
-	        buildRef.get().name = name;
+	        instanceRef.get().name = name;
 	        return this;
 	    }
 
 	    public Facilitator.Builder.Fluent<RecordBuilder<V,R>> buildFacilitator() {
-		    return new Facilitator.Builder.Fluent<>(r -> buildRef.get().facilitator = r, () -> self);
+		    return new Facilitator.Builder.Fluent<>(r -> instanceRef.get().facilitator = r, () -> self);
 	    }
 
-	    public Membership.RecordBuilder<RecordBuilder<V,R>>.MembershipBuilderGroup addMembership(){
-	        return Membership.RecordBuilder.start(m -> buildRef.get().memberships.add(m), self);
+	    public Membership.Builder.Fluent<RecordBuilder<V,R>>.MembershipBuilderGroup addMembership(){
+	        return Membership.Builder.Fluent.start(m -> instanceRef.get().memberships.add(m), () -> self);
 	    }
 
 		public R finalizeRoster(){

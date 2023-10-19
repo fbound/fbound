@@ -33,7 +33,7 @@ public abstract class BuilderBase<T,V,R,B extends BuilderBase<? super T,V,R,? su
 	/**
 	 * This supplier is called EVERY time the instance is modified, the value is never cached, DO NOT USE a constructor or factory. This is a Supplier to reference an object that must be created after creating the Builder or to allow controlled access or proxy objects.
 	 */
-	protected Supplier<T> buildRef;
+	protected Supplier<T> instanceRef;
 	protected Function<T,V> factory;
 	protected Consumer<V> consumer;
 	protected Supplier<R> returnRef;
@@ -45,13 +45,13 @@ public abstract class BuilderBase<T,V,R,B extends BuilderBase<? super T,V,R,? su
 	protected B self = (B) this;
 
 	/**
-	 * @param buildRef Reference to the instance object to modify. This supplier is called every time the instance is modified, the value is never cached. Do not use a constructor or factory. This is a Supplier to reference an object that must be created after creating the Builder or to allow controlled access or proxy objects.
-	 * @param factory Factory function to construct V 'builtValue' from T 'buildRef.get()'
+	 * @param instanceRef Reference to the instance object to modify. This supplier is called every time the instance is modified, the value is never cached. Do not use a constructor or factory. This is a Supplier to reference an object that must be created after creating the Builder or to allow controlled access or proxy objects.
+	 * @param factory Factory function to construct V 'builtValue' from T 'instanceRef.get()'
 	 * @param consumer Consumer to use the final built V value, will be called once during 'finalizeInstance'
 	 * @param returnRef Supplies the value to return for 'finalizeInstance'
 	 */
-	protected BuilderBase(Supplier<T> buildRef, Function<T,V> factory, Consumer<V> consumer, Supplier<R> returnRef) {
-		this.buildRef = buildRef;
+	protected BuilderBase(Supplier<T> instanceRef, Function<T,V> factory, Consumer<V> consumer, Supplier<R> returnRef) {
+		this.instanceRef = instanceRef;
 		this.factory = factory;
 		this.consumer = consumer;
 		this.returnRef = returnRef;
@@ -72,7 +72,7 @@ public abstract class BuilderBase<T,V,R,B extends BuilderBase<? super T,V,R,? su
 	 * @return value supplied by 'returnRef', typically will be V 'builtValue' for standalone Builders or another Builder type when chaining Builders.
 	 */
 	protected R finalizeInstance() {
-		builtValue = factory.apply(buildRef.get());
+		builtValue = factory.apply(instanceRef.get());
 		consumer.accept(builtValue);
 		return returnRef.get();
 	}

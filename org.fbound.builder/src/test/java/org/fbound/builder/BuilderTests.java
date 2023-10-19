@@ -1,17 +1,15 @@
 package org.fbound.builder;
 
+import org.fbound.builder.test.Membership;
 import org.fbound.builder.test.Roster;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.lang.invoke.MethodHandles;
 import java.util.Date;
+import java.util.logging.Logger;
 
 public class BuilderTests {
-	private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+	private static final Logger log = Logger.getLogger(BuilderTests.class.getName());
 
 	@Before
 	public void setup(){}
@@ -30,6 +28,11 @@ public class BuilderTests {
 	@Test
 	public void testRosterBuilder() {
 		String[] nameRef = {null};
+
+		Membership m = new Membership.Builder().setCohortId("cid").setMembershipId("mid").setGroupId("gid").finalizeInstance();
+		Membership m2 = Membership.Builder.start().groupId("gid").cohortId("cid").membershipId("mid");
+		String rStr = Membership.RecordBuilder.start(BuilderOpts.build(new Membership.Record()).toValue(Object::toString)).groupId("gid").cohortId("cid").membershipId("mid");
+
 		Roster r = new Roster.Builder()
 				.setName("name")
 

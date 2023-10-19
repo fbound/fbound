@@ -6,7 +6,6 @@ import org.fbound.builder.BuilderOpts;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 public class User {
 	private String name;
@@ -14,14 +13,12 @@ public class User {
 	private Map<String,String> opts;
 	private Membership primaryMembership;
 	private Membership secondaryMembership;
-	private List<Membership> memberships;
 
 	public User(Record record){
 		this.name = record.name;
 		this.date = record.date;
-		this.primaryMembership = new Membership(record.primaryMembership);
-		this.secondaryMembership = new Membership(record.secondaryMembership);
-		this.memberships = record.memberships.stream().map(Membership::new).collect(Collectors.toList());
+		this.primaryMembership = new Membership.Builder(record.primaryMembership).finalizeMembership();
+		this.secondaryMembership = new Membership.Builder(record.secondaryMembership).finalizeMembership();
 		this.opts = record.opts;
 	}
 
@@ -45,39 +42,38 @@ public class User {
 	    return secondaryMembership;
 	}
 
-	public List<Membership> getMemberships() {
-	    return memberships;
-	}
-
 	public static class Record {
 		public String name;
 		public Date date;
 		public Map<String,String> opts = new HashMap<>();
 		public Membership.Record primaryMembership;
 		public Membership.Record secondaryMembership;
-		public List<Membership.Record> memberships = new ArrayList<>();
 	}
 
 	public static class RecordBuilder<T extends Record, V, R, B extends RecordBuilder<T,V,R,? super B>> extends BuilderBase<T,V,R,B> {
 		public RecordBuilder(BuilderOpts<T,V,R> options) { super(options); }
 
 		public B setName(String name) {
-			buildRef.get().name = name;
+			instanceRef.get().name = name;
 			return self;
 		}
 
 		public B setDate(Date date) {
-			buildRef.get().date = date;
+			instanceRef.get().date = date;
 			return self;
 		}
 
 		public B setOption(String key, String value){
-			buildRef.get().opts.put(key, value);
+			instanceRef.get().opts.put(key, value);
 			return self;
 		}
 
-		public Membership.RecordBuilder<B>.MembershipBuilderGroup setPrimaryMembership(){
-			return Membership.RecordBuilder.start(m -> buildRef.get().primaryMembership = m, self);
+		public Membership.Builder.Fluent<B>.MembershipBuilderGroup setPrimaryMembership(){
+			return Membership.Builder.Fluent.start(m -> instanceRef.get().primaryMembership = m, () -> self);
+		}
+
+		public Membership.Builder.Fluent<B>.MembershipBuilderGroup setSecondaryMembership(){
+			return Membership.Builder.Fluent.start(m -> instanceRef.get().secondaryMembership = m, () -> self);
 		}
 
 		public R finalizeUser(){
