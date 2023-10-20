@@ -1,49 +1,36 @@
-package org.fbound.builder;
+package org.fbound.builder.test;
 
-import org.fbound.builder.test.Membership;
-import org.fbound.builder.test.Roster;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.fbound.builder.BuilderOpts;
 import java.util.Date;
-import java.util.logging.Logger;
 
 public class BuilderTests {
-	private static final Logger log = Logger.getLogger(BuilderTests.class.getName());
 
-	@Before
-	public void setup(){}
+	public static void main(String[] args) {
+		// Using final Array to set/get String value from within lambdas.
+		final String[] nameRef = {null};
 
-	private boolean assertException(Runnable test){
-		log.info("Expecting exception:");
-		try {
-			test.run();
-		}catch(Throwable t){
-			return true;
-		}
-		Assert.fail("no exception caught");
-		return false;
-	}
-
-	@Test
-	public void testRosterBuilder() {
-		String[] nameRef = {null};
-
-		Membership m = new Membership.Builder().setCohortId("cid").setMembershipId("mid").setGroupId("gid").finalizeInstance();
+		// Unguided Builder
+		Membership m = new Membership.Builder().setCohortId("cid").setMembershipId("mid").setGroupId("gid").finalizeMembership();
+		// Guided Builder
 		Membership m2 = Membership.Builder.start().groupId("gid").cohortId("cid").membershipId("mid");
+		// Guided Builder to String Value
 		String rStr = Membership.RecordBuilder.start(BuilderOpts.build(new Membership.Record()).toValue(Object::toString)).groupId("gid").cohortId("cid").membershipId("mid");
 
 		Roster r = new Roster.Builder()
 				.setName("name")
 
-				.buildFacilitator()
+				.buildFacilitator()// Change to Facilitator Builder
 					.setName("facil name")
 					.setDate(new Date())
-					.finalizeUser()
+					.finalizeUser() // return to Roster Builder
 
+				// Use guided Membership Builder
 				.addMembership().groupId("gid").cohortId("cid").membershipId("mid")
 
+				// Accept used to pass in a method
 				.accept(BuilderTests::builderAction)
+
+				// Accept used as fluent escape-hatch
 				.accept(b -> {
 					try {
 						Thread.sleep(10);
@@ -51,24 +38,22 @@ public class BuilderTests {
 					}catch (InterruptedException ignored){}
 				})
 
+				// Apply used to change to another class designed to return to Roster Builder
 				.apply(BuilderTests.RosterActions::new)
 					.stayHereOn1().stayHereOn1()
 					.goNextTo2().stayHereOn2().goBackTo1()
 					.stayHereOn1().goNextTo2()
 					.returnToBuilder()
 
+				// Edit used to copy name value into local variable
 				.edit(record -> {
 					if(record.name.length() < 3){
 						record.name = "100-" + record.name;
 						nameRef[0] = record.name;
 					}
 				})
-
-				.edit(record -> {
-					if(nameRef[0] != null){
-						record.name = record.name + "-2";
-					}
-				})
+				// Edit used to access local variable
+				.edit(record -> record.name = nameRef[0] + "-2")
 
 				.finalizeRoster();
 	}

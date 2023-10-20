@@ -1348,7 +1348,14 @@ public <T extends FacilitatorBuilder<T>> void test(T builder){
 
 You can avoid needing the `? super` by propagating the F-Bounded constraints, but the concrete classes allowed by `? super` can be much easier to work with than their F-Bounded counterparts.
 
-That said the `? super` lower bound is specific to the `Java`/`JVM` implementation of generics.  `C#`/`CLR` does not have an equivalent operator and `C#` is limited to the normal  strict F-Bounded Polymorphism.
+I will note that the `? super` lower bound operator is specific to Java's implementation of generics.  `C#`/`CLR` does not have an equivalent operator and `C#` is limited to the normal strict F-Bounded Polymorphism.
+
+That said, we can re-write `Type<T extends Type<? super T>>` without the `?` wildcard as a normal F-Bounded type by replacing the `?` wildcard with another type:
+```java
+// Generic Method Type Parameter
+<S extends Type<S>, T extends S>
+```
+`S extends Type<S>` replaces the `?` wildcard as the type directly extending `Type`, and `T extends S` is expanded as `T extends S extends Type<S>`.  Knowing this is a recursive parameter we can rewrite it as `T extends Type<S extends Type<S>>` which is the same as `T extends Type<? super T>`.  In this formulation we get both `T` the type itself and `S` the parent type by naming them separately.
 
 Wrapping up on the F-Bounded `UserBuilder`, the only difference in our latest version the addition of `? super`.:
 ```java

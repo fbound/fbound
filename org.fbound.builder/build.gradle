@@ -1,5 +1,1 @@
 publishing.publications.mavenJava.pom.description = 'FBound Builder - Fluent Builder Pattern'
-
-dependencies {
-    testImplementation 'junit:junit:4.12'
-}
