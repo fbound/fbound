@@ -1470,7 +1470,7 @@ public class UserBuilder<R> {
 
 Putting them together we get:
 ```java
-public class UserBuilder<UB extends UserBuilder<? super UB, R>, R> {
+public class UserBuilder<R, UB extends UserBuilder<R, ? super UB>> {
     protected Consumer<User> setter;
     protected R returnObject;
     protected User user;
@@ -1508,8 +1508,8 @@ public class UserBuilder<UB extends UserBuilder<? super UB, R>, R> {
         setter.accept(user);
         return returnObject;
     }
-    
-    public static <T extends UserBuilder<? super T, ? extends User>> T standalone(){
+
+    public static <T extends UserBuilder<? extends User, ? super T>> T standalone(){
         User user = new User();
         return (T)new UserBuilder<>(u -> {}, user, user);
     }
@@ -1518,7 +1518,7 @@ public class UserBuilder<UB extends UserBuilder<? super UB, R>, R> {
 
 The merged `FacilitatorBuilder`:
 ```java
-public class FacilitatorBuilder<R> extends UserBuilder<FacilitatorBuilder<R>, R> {
+public class FacilitatorBuilder<R> extends UserBuilder<R, FacilitatorBuilder<R>> {
     public FacilitatorBuilder(Consumer<Facilitator> setter, R returnObject) {
         this(setter, returnObject, new Facilitator());
     }
@@ -1697,10 +1697,10 @@ We don't have any plans to subtype `Facilitator`, but we'll stick with
 ## The Configurable Chainable Polymorphic Builder
 Let's merge it all together and take a look.
 ```java
-public class UserBuilder<UB extends UserBuilder<? super UB, U, R>, U extends User, R> {
-	protected Consumer<U> setter;
-	protected R returnObject;
-	protected U user;
+public class UserBuilder<U extends User, R, UB extends UserBuilder<U, R, ? super UB>> {
+    protected Consumer<U> setter;
+    protected R returnObject;
+    protected U user;
 
 	public UserBuilder(Consumer<U> setter, R returnObject, U user) {
 		this.setter = setter;
@@ -1743,13 +1743,13 @@ The new `U` type parameter fits in cleanly.  It doesn't change any of our method
 The `standalone()` method is somewhat simplified.  We no longer need the type bounds on each type parameter.  We'll see that that `FacilitatorBuilder`'s `standalone()` method no longer clashes with `User` parameterized to `U`.  
 That's good, because it was getting long with them all in.  We won't have to suffer with:
 ```java
-public static <T extends UserBuilder<? super T, ? extends User, ? extends User>> T standalone(){
+public static <T extends UserBuilder<? extends User, ? extends User, ? super T>> T standalone(){
 ```
 Our combined `UserBuilder` doesn't look much different, if anything a little cleaner.
 
 Now for the `FacilitatorBuilder`:
 ```java
-public class FacilitatorBuilder<U extends Facilitator, R> extends UserBuilder<FacilitatorBuilder<U,R>, U, R> {
+public class FacilitatorBuilder<U extends Facilitator, R> extends UserBuilder<U, R, FacilitatorBuilder<U,R>> {
     public FacilitatorBuilder(Consumer<U> setter, R returnObject, U facilitator) {
         super(setter, returnObject, facilitator);
     }
@@ -1772,7 +1772,7 @@ public class FacilitatorBuilder<U extends Facilitator, R> extends UserBuilder<Fa
 ```
 And if we did not want to parameterize the `Facilitator` type, it would be:
 ```java
-public class FacilitatorBuilder<R> extends UserBuilder<FacilitatorBuilder<R>, Facilitator, R> {
+public class FacilitatorBuilder<R> extends UserBuilder<Facilitator, R, FacilitatorBuilder<R>> {
     public FacilitatorBuilder(Consumer<Facilitator> setter, R returnObject) {
         super(setter, returnObject, new Facilitator());
     }
@@ -1850,9 +1850,9 @@ These are the 3 fundamental patterns:
 We can combine those patterns in different ways, giving us 4 compound patterns:
 
 4. `<U extends User, R>` - Configurable Chainable Builder
-5. `<UB extends UserBuilder<UB, R>, R>` - Configurable F-Polymorphic Builder
-6. `<UB extends UserBuilder<UB, U, R>, U extends User>` - Chainable F-Polymorphic Builder
-7. `<UB extends UserBuilder<UB, U, R>, U extends User, R>` - Configurable Chainable F-Polymorphic Builder
+5. `<R, UB extends UserBuilder<R, UB>>` - Configurable F-Polymorphic Builder
+6. `<U extends User, UB extends UserBuilder<U, R, UB>>` - Chainable F-Polymorphic Builder
+7. `<U extends User, R, UB extends UserBuilder<U, R, UB>>` - Configurable Chainable F-Polymorphic Builder
 
 These 7 patterns are not limited to Builder types.  I view these as the fundamental types useful for all fluent APIs.  I have encountered these same patterns in multiple domains creating fluent and non-fluent apis.
 
