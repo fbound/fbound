@@ -1801,7 +1801,7 @@ public class RosterBuilder {
     }
 
     public FacilitatorBuilder<Facilitator,RosterBuilder> buildFacilitator() {
-		return new FacilitatorBuilder<>(user -> roster.setFacilitator(user), this, new Facilitator());
+        return new FacilitatorBuilder<>(user -> roster.setFacilitator(user), this, new Facilitator());
     }
 
     public MembershipBuilder<RosterBuilder>.MembershipBuilderGroup addMembership(){

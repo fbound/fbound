@@ -1,7 +1,7 @@
 # FBound
 Tools for building better APIs.
 
-The FBound project was created out of writing the [FBound Guide to Advanced Fluent APIs](docs/advanced_fluent_apis.md), a guide for advanced uses of generic types.  This guide was written to explain the generic type patterns and techniques I used in creating [Page-Model-Tools](https://github.com/pagemodel/page-model-tools) web testing framework.
+The FBound project was created out of writing the [FBound Guide to Advanced Fluent APIs](docs/advanced_fluent_apis.md), a guide for advanced uses of generic types.  This guide was written to explain the generic type patterns and techniques used in creating the [Page-Model-Tools](https://github.com/pagemodel/page-model-tools) web testing framework.
 
 ## FBound Builder Pattern
 The FBound `BuilderBase` serves as a base class for any `Builder` type.  This pattern allows inheritance, chaining, and re-use of your `Builder`.
