@@ -1844,8 +1844,8 @@ We then made three different version to fix three different problems.  Each prob
 These are the 3 fundamental patterns:
 1. `<R>` - Return Value - Chainable Builder
 2. `<U extends User>` - Configuration Type - Configurable Builder
-3. `<UB extends UserBuilder<UB>>` - Self Type - F-Polymorphic Builder 
-   * or `<UB extends UserBuilder<? super UB>>` - FL-Polymorphic Builder
+3. `<UB extends UserBuilder<UB>>` - Self Type - F-Polymorphic Builder  
+    * or `<UB extends UserBuilder<? super UB>>` - FL-Polymorphic Builder
 
 We can combine those patterns in different ways, giving us 4 compound patterns:
 
