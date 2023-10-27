@@ -352,7 +352,7 @@ public class User {
 ```
 Leadership was so impressed with our `StringSetter` work that adding a `MembershipBuilder` to our `UserBuilder` is the *number one priority*.
 
-No problem, copy the pattern in `StringSetter` with methods for the `Membership` fields: 
+No problem, copy the pattern in `StringSetter` with methods for the `Membership` fields:
 ```java
 public class MembershipBuilder<R> {
     private Consumer<Membership> setter;
@@ -687,7 +687,7 @@ error->         .setFacilitatorOption("f1", "fv1")
 
 The first attempt is pretty good.  It does the job.  If it ain't broke, don't fix it. Right?  Is it *ain't broke* though?  I'm looking at an error in the example above.  As was said earlier we're build a Fluent API, we want chaining.
 
-We have two things to fix: 
+We have two things to fix:  
 1. Allow `FacilitatorBuilder`/`UserBuilder` to be chained like `MembershipBuilder` and `StringSetter`.
 2. Fix the `FacilitatorBuilder` so it stays a `FacilitatorBuilder` and always returns `Facilitator`.
 
@@ -702,13 +702,13 @@ public class UserBuilder<R> {
     protected Consumer<User> setter;
     protected R returnObject;
     protected final User user;
-    
+
     public UserBuilder(Consumer<User> setter, R returnObject) {
         this.setter = setter;
         this.returnObject = returnObject;
         this.user = new User();
     }
-	
+
     public UserBuilder<R> setName(String name) {
         user.setName(name);
         return this;
@@ -759,8 +759,8 @@ One peculiarity is the use of a lower-bounded wildcard in `Consumer<? super Faci
 We need to make sure `setter` is bounded as `Consumer<Facilitator>`, but we also need it to fit the type bounds `Consumer<User>` to pass it to `UserBuilder` constructor.  A `Consumer<Facilitator>` cannot be cast to a `Consumer<User>`, you will get an `Inconvertible types` error.  User the wildcard replaces the `Inconvertible types` error to an `Unchecked cast` warning.  We know this will only be used with a `Facilitator` at runtime and can ignore the warning.  A different approach would be to create a new `Consumer<User>` to wrap the `Consumer<Facilitator>` and moving the `Unchecked cast` warning.
 
 > Interestingly, we could also use an upper-bounded wildcard `Consumer<? extends Facilitator>` instead of `? super` to fix the `Inconvertible types` error.  Doing this would create a new problem, we could be given a `Consumer` for a subtype of `Facilitator` which call try to call methods a plain `Facilitator` does not have.  It would be the same as trying to call `setFacilitatorId` on a plain `User` object.
-> 
-> It is important to note that the `? super` type lower-bound is not universal.  It is available in `Java`, but not in `C#`.  Generics are implemented differently on the `JVM` and `CLR`. 
+>
+> It is important to note that the `? super` type lower-bound is not universal.  It is available in `Java`, but not in `C#`.  Generics are implemented differently on the `JVM` and `CLR`.
 
 ```java
 public FacilitatorBuilder(Consumer<Facilitator> setter, R returnObject) {
@@ -920,26 +920,26 @@ The `UserBuilder`:
 ```java
 public class UserBuilder {
     protected User user = new User();
-    
+
     public UserBuilder setName(String name) {
         user.setName(name);
         return this;
     }
-    
+
     public UserBuilder setDate(Date date) {
         user.setDate(date);
         return this;
     }
-    
+
     public UserBuilder setOption(String key, String value){
         user.setOption(key, value);
         return this;
     }
-    
+
     public MembershipBuilder<UserBuilder> setPrimaryMembership(){
         return new MembershipBuilder<>(m -> user.setPrimaryMembership(m), this);
     }
-    
+
     public User finalizeUser(){
         return user;
     }
@@ -951,17 +951,17 @@ public class FacilitatorBuilder extends UserBuilder {
     public FacilitatorBuilder() {
         super.user = new Facilitator();
     }
-    
+
     public FacilitatorBuilder setFacilitatorId(String facilitatorId) {
         ((Facilitator)user).setFacilitatorId(facilitatorId);
         return this;
     }
-    
+
     public FacilitatorBuilder setFacilitatorOption(String key, String value){
         ((Facilitator)user).setFacilitatorOption(key, value);
         return this;
     }
-    
+
     @Override
     public Facilitator finalizeUser() {
         return (Facilitator)super.user;
@@ -1044,34 +1044,34 @@ Here is F-Bounded `UserBuilder`:
 ```java
 public class UserBuilder<UB extends UserBuilder<UB>> {
     protected final User user;
-    
+
     public UserBuilder() {
         this(new User());
     }
-    
+
     public UserBuilder(User user) {
         this.user = user;
     }
-    
+
     public UB setName(String name) {
         user.setName(name);
         return (UB)this;
     }
-    
+
     public UB setDate(Date date) {
         user.setDate(date);
         return (UB)this;
     }
-    
+
     public UB setOption(String key, String value){
         user.setOption(key, value);
         return (UB)this;
     }
-    
+
     public MembershipBuilder<UB>.MembershipBuilderGroup setPrimaryMembership(){
         return MembershipBuilder.start(m -> user.setPrimaryMembership(m), (UB)this);
     }
-    
+
     public User finalizeUser(){
         return user;
     }
@@ -1361,30 +1361,30 @@ Wrapping up on the F-Bounded `UserBuilder`, the only difference in our latest ve
 ```java
 public class UserBuilder<UB extends UserBuilder<? super UB>> {
     protected User user;
-    
+
     public UserBuilder() {
         this.user = new User();
     }
-    
+
     public UB setName(String name) {
         user.setName(name);
         return (UB)this;
     }
-    
+
     public UB setDate(Date date) {
         user.setDate(date);
         return (UB)this;
     }
-    
+
     public UB setOption(String key, String value){
         user.setOption(key, value);
         return (UB)this;
     }
-    
+
     public MembershipBuilder<UB>.MembershipBuilderGroup setPrimaryMembership(){
         return MembershipBuilder.start(m -> user.setPrimaryMembership(m), (UB)this);
     }
-    
+
     public User finalizeUser(){
         return user;
     }
@@ -1426,41 +1426,41 @@ public class UserBuilder<R> {
     protected Consumer<User> setter;
     protected R returnObject;
     protected User user;
-    
+
     public UserBuilder(Consumer<User> setter, R returnObject, User user) {
         this.setter = setter;
         this.returnObject = returnObject;
         this.user = user;
     }
-    
+
     public UserBuilder(Consumer<User> setter, R returnObject) {
         this(setter, returnObject, new User());
     }
-    
+
     public UserBuilder<R> setName(String name) {
         user.setName(name);
         return this;
     }
-    
+
     public UserBuilder<R> setDate(Date date) {
         user.setDate(date);
         return this;
     }
-    
+
     public UserBuilder<R> setOption(String key, String value){
         user.setOption(key, value);
         return this;
     }
-    
+
     public MembershipBuilder<UserBuilder<R>>.MembershipBuilderGroup setPrimaryMembership(){
         return MembershipBuilder.start(m -> user.setPrimaryMembership(m), this);
     }
-    
+
     public R finalizeUser(){
         setter.accept(user);
         return returnObject;
     }
-    
+
     public static UserBuilder<? extends User> standalone(){
         User user = new User();
         return new UserBuilder<>(u -> {}, user, user);
@@ -1474,7 +1474,7 @@ public class UserBuilder<R, UB extends UserBuilder<R, ? super UB>> {
     protected Consumer<User> setter;
     protected R returnObject;
     protected User user;
-    
+
     public UserBuilder(Consumer<User> setter, R returnObject, User user) {
         this.setter = setter;
         this.returnObject = returnObject;
@@ -1484,26 +1484,26 @@ public class UserBuilder<R, UB extends UserBuilder<R, ? super UB>> {
     public UserBuilder(Consumer<User> setter, R returnObject) {
         this(setter, returnObject, new User());
     }
-    
+
     public UB setName(String name) {
         user.setName(name);
         return (UB)this;
     }
-    
+
     public UB setDate(Date date) {
         user.setDate(date);
         return (UB)this;
     }
-    
+
     public UB setOption(String key, String value){
         user.setOption(key, value);
         return (UB)this;
     }
-    
+
     public MembershipBuilder<UB>.MembershipBuilderGroup setPrimaryMembership(){
         return MembershipBuilder.start(m -> user.setPrimaryMembership(m), (UB)this);
     }
-    
+
     public R finalizeUser(){
         setter.accept(user);
         return returnObject;
@@ -1522,21 +1522,21 @@ public class FacilitatorBuilder<R> extends UserBuilder<R, FacilitatorBuilder<R>>
     public FacilitatorBuilder(Consumer<Facilitator> setter, R returnObject) {
         this(setter, returnObject, new Facilitator());
     }
-    
+
     public FacilitatorBuilder(Consumer<? super Facilitator> setter, R returnObject, Facilitator facilitator) {
         super((Consumer<User>) setter, returnObject, facilitator);
     }
-    
+
     public FacilitatorBuilder<R> setFacilitatorId(String facilitatorId) {
         ((Facilitator)user).setFacilitatorId(facilitatorId);
         return this;
     }
-    
+
     public FacilitatorBuilder<R> setFacilitatorOption(String key, String value){
         ((Facilitator)user).setFacilitatorOption(key, value);
         return this;
     }
-    
+
     public static FacilitatorBuilder<Facilitator> standalone(){
         Facilitator facilitator = new Facilitator();
         return new FacilitatorBuilder<>(u -> {}, facilitator, facilitator);
@@ -1555,26 +1555,26 @@ Here are the simple builders again:
 ```java
 public class UserBuilder {
     protected User user = new User();
-    
+
     public UserBuilder setName(String name) {
         user.setName(name);
         return this;
     }
-    
+
     public UserBuilder setDate(Date date) {
         user.setDate(date);
         return this;
     }
-    
+
     public UserBuilder setOption(String key, String value){
         user.setOption(key, value);
         return this;
     }
-    
+
     public MembershipBuilder<UserBuilder> setPrimaryMembership(){
         return new MembershipBuilder<>(m -> user.setPrimaryMembership(m), this);
     }
-    
+
     public User finalizeUser(){
         return user;
     }
@@ -1585,17 +1585,17 @@ public class FacilitatorBuilder extends UserBuilder {
     public FacilitatorBuilder() {
         super.user = new Facilitator();
     }
-    
+
     public FacilitatorBuilder setFacilitatorId(String facilitatorId) {
         ((Facilitator)user).setFacilitatorId(facilitatorId);
         return this;
     }
-    
+
     public FacilitatorBuilder setFacilitatorOption(String key, String value){
         ((Facilitator)user).setFacilitatorOption(key, value);
         return this;
     }
-    
+
     @Override
     public Facilitator finalizeUser() {
         return (Facilitator)super.user;
@@ -1608,34 +1608,34 @@ Add a type parameter `<U extends User>` give us this:
 ```java
 public class UserBuilder<U extends User> {
     protected final U user;
-    
+
     public UserBuilder(U user) {
         this.user = user;
     }
-    
+
     public UserBuilder<U> setName(String name) {
         user.setName(name);
         return this;
     }
-    
+
     public UserBuilder<U> setDate(Date date) {
         user.setDate(date);
         return this;
     }
-    
+
     public UserBuilder<U> setOption(String key, String value){
         user.setOption(key, value);
         return this;
     }
-    
+
     public MembershipBuilder<UserBuilder<U>> setPrimaryMembership(){
         return new MembershipBuilder<>(m -> user.setPrimaryMembership(m), this);
     }
-    
+
     public U finalizeUser(){
         return user;
     }
-    
+
     public static UserBuilder<? extends User> standalone(){
         User user = new User();
         return new UserBuilder<>(user);
@@ -1653,12 +1653,12 @@ public class FacilitatorBuilder extends UserBuilder<Facilitator> {
     public FacilitatorBuilder() {
         this(new Facilitator());
     }
-    
+
     public FacilitatorBuilder setFacilitatorId(String facilitatorId) {
         user.setFacilitatorId(facilitatorId);
         return this;
     }
-    
+
     public FacilitatorBuilder setFacilitatorOption(String key, String value){
         user.setFacilitatorOption(key, value);
         return this;
@@ -1673,17 +1673,17 @@ public class FacilitatorBuilder<U extends Facilitator> extends UserBuilder<U> {
     public FacilitatorBuilder(U facilitator) {
         super(facilitator);
     }
-    
+
     public FacilitatorBuilder setFacilitatorId(String facilitatorId) {
         user.setFacilitatorId(facilitatorId);
         return this;
     }
-    
+
     public FacilitatorBuilder setFacilitatorOption(String key, String value){
         user.setFacilitatorOption(key, value);
         return this;
     }
-    
+
     public static FacilitatorBuilder<? extends Facilitator> standalone(){
         Facilitator user = new Facilitator();
         return new FacilitatorBuilder<>(user);
@@ -1692,7 +1692,7 @@ public class FacilitatorBuilder<U extends Facilitator> extends UserBuilder<U> {
 ```
 Just like the `UserBuilder`, the constructor now takes a `U facilitator` object, and we have the static `standalone()` method in place of the default constructor.
 
-We don't have any plans to subtype `Facilitator`, but we'll stick with 
+We don't have any plans to subtype `Facilitator`, but we'll stick with
 
 ## The Configurable Chainable Polymorphic Builder
 Let's merge it all together and take a look.
@@ -1702,11 +1702,11 @@ public class UserBuilder<U extends User, R, UB extends UserBuilder<U, R, ? super
     protected R returnObject;
     protected U user;
 
-	public UserBuilder(Consumer<U> setter, R returnObject, U user) {
-		this.setter = setter;
-		this.returnObject = returnObject;
-		this.user = user;
-	}
+    public UserBuilder(Consumer<U> setter, R returnObject, U user) {
+        this.setter = setter;
+        this.returnObject = returnObject;
+        this.user = user;
+    }
 
     public UB setName(String name) {
         user.setName(name);
@@ -1728,8 +1728,8 @@ public class UserBuilder<U extends User, R, UB extends UserBuilder<U, R, ? super
     }
 
     public R finalizeUser(){
-	    setter.accept(user);
-	    return returnObject;
+        setter.accept(user);
+        return returnObject;
     }
 
     public static <T extends UserBuilder<T,User,User>> T standalone(){
@@ -1753,17 +1753,17 @@ public class FacilitatorBuilder<U extends Facilitator, R> extends UserBuilder<U,
     public FacilitatorBuilder(Consumer<U> setter, R returnObject, U facilitator) {
         super(setter, returnObject, facilitator);
     }
-    
+
     public FacilitatorBuilder<U,R> setFacilitatorId(String facilitatorId) {
         user.setFacilitatorId(facilitatorId);
         return this;
     }
-    
+
     public FacilitatorBuilder<U,R> setFacilitatorOption(String key, String value){
         user.setFacilitatorOption(key, value);
         return this;
     }
-    
+
     public static FacilitatorBuilder<Facilitator,Facilitator> standalone(){
         Facilitator facilitator = new Facilitator();
         return new FacilitatorBuilder<>(u -> {}, facilitator, facilitator);
@@ -1808,9 +1808,9 @@ public class RosterBuilder {
         return MembershipBuilder.start(m -> roster.addMembership(m), this);
     }
 
-	public Roster finalizeRoster(){
-		return roster;
-	}
+    public Roster finalizeRoster(){
+        return roster;
+    }
 }
 ```
 
