@@ -8,6 +8,8 @@ import org.fbound.builder.extension.Edit;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class Roster {
@@ -37,23 +39,31 @@ public class Roster {
 		public String name;
 		public Facilitator.Record facilitator;
 		public List<Membership.Record> memberships = new ArrayList<>();
+
+		public static class Builder extends BaseBuilder<Record,Record> {
+			public Builder(Record record) { super(BuilderOpts.build(record)); }
+			public Builder() { this(new Record()); }
+			public static class Fluent<R> extends BaseBuilder<Record,R> {
+				public Fluent(Consumer<Record> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+			}
+		}
 	}
 
-	public static class RecordBuilder<V,R> extends BuilderBase<Record,V,R,RecordBuilder<V,R>>
-			implements Accept<RecordBuilder<V,R>>, Apply<RecordBuilder<V,R>>, Edit<Record,RecordBuilder<V,R>> {
-		public RecordBuilder(BuilderOpts<Record,V,R> options) { super(options); }
+	public static class BaseBuilder<V,R> extends BuilderBase<Record,V,R, BaseBuilder<V,R>>
+			implements Accept<BaseBuilder<V,R>>, Apply<BaseBuilder<V,R>>, Edit<Record, BaseBuilder<V,R>> {
+		public BaseBuilder(BuilderOpts<Record,V,R> options) { super(options); }
 
-		public RecordBuilder<V,R> setName(String name) {
+		public BaseBuilder<V,R> setName(String name) {
 	        instanceRef.get().name = name;
 	        return this;
 	    }
 
-	    public Facilitator.Builder.Fluent<RecordBuilder<V,R>> buildFacilitator() {
-		    return new Facilitator.Builder.Fluent<>(r -> instanceRef.get().facilitator = r, () -> self);
+	    public Facilitator.Record.Builder.Fluent<BaseBuilder<V,R>> buildFacilitator() {
+		    return new Facilitator.Record.Builder.Fluent<>(r -> instanceRef.get().facilitator = r, () -> self);
 	    }
 
-	    public Membership.Builder.Fluent<RecordBuilder<V,R>>.MembershipBuilderGroup addMembership(){
-	        return Membership.Builder.Fluent.start(m -> instanceRef.get().memberships.add(m), () -> self);
+	    public Membership.Record.Builder.Fluent<BaseBuilder<V,R>>.MembershipBuilderGroup addMembership(){
+	        return Membership.Record.Builder.Fluent.start(m -> instanceRef.get().memberships.add(m), () -> self);
 	    }
 
 		public R finalizeRoster(){
@@ -61,8 +71,11 @@ public class Roster {
 		}
 	}
 
-	public static class Builder extends RecordBuilder<Roster,Roster> {
+	public static class Builder extends BaseBuilder<Roster,Roster> {
 		public Builder(Record record) { super(BuilderOpts.build(record).toValue(Roster::new)); }
 		public Builder() { this(new Record()); }
+		public static class Fluent<R> extends BaseBuilder<Roster,R> {
+			public Fluent(Consumer<Roster> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+		}
 	}
 }

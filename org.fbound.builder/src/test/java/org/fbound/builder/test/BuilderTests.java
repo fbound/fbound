@@ -14,7 +14,7 @@ public class BuilderTests {
 		// Guided Builder
 		Membership m2 = Membership.Builder.start().groupId("gid").cohortId("cid").membershipId("mid");
 		// Guided Builder to String Value
-		String rStr = Membership.RecordBuilder.start(BuilderOpts.build(new Membership.Record()).toValue(Object::toString)).groupId("gid").cohortId("cid").membershipId("mid");
+		String rStr = Membership.BaseBuilder.start(BuilderOpts.build(new Membership.Record()).toValue(Object::toString)).groupId("gid").cohortId("cid").membershipId("mid");
 
 		Roster r = new Roster.Builder()
 				.setName("name")
@@ -58,11 +58,11 @@ public class BuilderTests {
 				.finalizeRoster();
 	}
 
-	public static void builderAction(Roster.RecordBuilder<?,?> b){
+	public static void builderAction(Roster.BaseBuilder<?,?> b){
 		b.addMembership().groupId("gid2").cohortId("cid2").membershipId("mid2");
 	}
 
-	public static class RosterActions<V,R,B extends Roster.RecordBuilder<V,R>> {
+	public static class RosterActions<V,R,B extends Roster.BaseBuilder<V,R>> {
 		private B builder;
 		public RosterActions(B builder) {
 			this.builder = builder;
@@ -79,7 +79,7 @@ public class BuilderTests {
 		}
 	}
 
-	public static class RosterActions2<V,R,B extends Roster.RecordBuilder<V,R>> {
+	public static class RosterActions2<V,R,B extends Roster.BaseBuilder<V,R>> {
 		private B builder;
 		public RosterActions2(B builder) {
 			this.builder = builder;

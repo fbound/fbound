@@ -48,10 +48,18 @@ public class User {
 		public Map<String,String> opts = new HashMap<>();
 		public Membership.Record primaryMembership;
 		public Membership.Record secondaryMembership;
+
+		public static class Builder extends BaseBuilder<Record,Record,Record,Builder> {
+			public Builder(Record record) { super(BuilderOpts.build(record)); }
+			public Builder() { this(new Record()); }
+			public static class Fluent<R> extends BaseBuilder<Record,Record,R,Fluent<R>> {
+				public Fluent(Consumer<Record> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+			}
+		}
 	}
 
-	public static class RecordBuilder<T extends Record, V, R, B extends RecordBuilder<T,V,R,? super B>> extends BuilderBase<T,V,R,B> {
-		public RecordBuilder(BuilderOpts<T,V,R> options) { super(options); }
+	public static class BaseBuilder<T extends Record, V, R, B extends BaseBuilder<T,V,R,? super B>> extends BuilderBase<T,V,R,B> {
+		public BaseBuilder(BuilderOpts<T,V,R> options) { super(options); }
 
 		public B setName(String name) {
 			instanceRef.get().name = name;
@@ -68,12 +76,12 @@ public class User {
 			return self;
 		}
 
-		public Membership.Builder.Fluent<B>.MembershipBuilderGroup setPrimaryMembership(){
-			return Membership.Builder.Fluent.start(m -> instanceRef.get().primaryMembership = m, () -> self);
+		public Membership.Record.Builder.Fluent<B>.MembershipBuilderGroup setPrimaryMembership(){
+			return Membership.Record.Builder.Fluent.start(m -> instanceRef.get().primaryMembership = m, () -> self);
 		}
 
-		public Membership.Builder.Fluent<B>.MembershipBuilderGroup setSecondaryMembership(){
-			return Membership.Builder.Fluent.start(m -> instanceRef.get().secondaryMembership = m, () -> self);
+		public Membership.Record.Builder.Fluent<B>.MembershipBuilderGroup setSecondaryMembership(){
+			return Membership.Record.Builder.Fluent.start(m -> instanceRef.get().secondaryMembership = m, () -> self);
 		}
 
 		public R finalizeUser(){
@@ -81,11 +89,11 @@ public class User {
 		}
 	}
 
-	public static class Builder extends RecordBuilder<Record,User,User,Builder> {
+	public static class Builder extends BaseBuilder<Record,User,User,Builder> {
 		public Builder(Record record) { super(BuilderOpts.build(record).toValue(User::new)); }
 		public Builder() { this(new Record()); }
-		public static class Fluent<R> extends RecordBuilder<Record,Record,R, Fluent<R>> {
-			public Fluent(Consumer<Record> consumer, Supplier<R> returnRef) { super(BuilderOpts.build(new Record()).asFluent(consumer, returnRef)); }
+		public static class Fluent<R> extends BaseBuilder<Record,User,R,Fluent<R>> {
+			public Fluent(Consumer<User> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
 		}
 	}
 }

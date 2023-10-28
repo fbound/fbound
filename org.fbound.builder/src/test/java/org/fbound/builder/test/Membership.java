@@ -34,33 +34,25 @@ public class Membership {
 	    public String groupId;
 	    public String cohortId;
 	    public String membershipId;
-	}
 
-	public static class Builder extends RecordBuilder<Membership,Membership,Builder> {
-		public Builder(Record record) { super(BuilderOpts.build(record).toValue(Membership::new)); }
-		public Builder() { this(new Record()); }
-
-		public static Builder.MembershipBuilderGroup start(){
-			return new Builder().new MembershipBuilderGroup();
-		}
-		public static Builder.MembershipBuilderGroup start(Record record){
-			return new Builder(record).new MembershipBuilderGroup();
-		}
-
-		public static class Fluent<R> extends RecordBuilder<Record,R,Fluent<R>> {
-			public static <R> Fluent<R>.MembershipBuilderGroup start(Consumer<Record> consumer, Supplier<R> returnRef){
-				return new Fluent<>(BuilderOpts.build(new Record()).asFluent(consumer, returnRef)).new MembershipBuilderGroup();
+		public static class Builder extends BaseBuilder<Record,Record,Builder> {
+			public Builder(Record record) { super(BuilderOpts.build(record)); }
+			public Builder() { this(new Record()); }
+			public static class Fluent<R> extends BaseBuilder<Record,R,Fluent<R>> {
+				public Fluent(Consumer<Record> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+				public static <R> Fluent<R>.MembershipBuilderGroup start(Consumer<Record> consumer, Supplier<R> returnRef){
+					return new Fluent<>(consumer, returnRef).new MembershipBuilderGroup();
+				}
 			}
-			private Fluent(BuilderOpts<Record,Record,R> options) { super(options); }
 		}
 	}
 
-	public static class RecordBuilder<V,R,B extends RecordBuilder<V,R,? super B>> extends BuilderBase<Record,V,R,B> {
-		public static <V,R,B extends RecordBuilder<V,R,? super B>> B.MembershipBuilderGroup start(BuilderOpts<Record,V,R> options){
-			 return ((B)new RecordBuilder<>(options)).new MembershipBuilderGroup();
+	public static class BaseBuilder<V,R,B extends BaseBuilder<V,R,? super B>> extends BuilderBase<Record,V,R,B> {
+		public static <V,R,B extends BaseBuilder<V,R,? super B>> B.MembershipBuilderGroup start(BuilderOpts<Record,V,R> options){
+			 return ((B)new BaseBuilder<>(options)).new MembershipBuilderGroup();
 		}
 
-		private RecordBuilder(BuilderOpts<Record, V, R> options) {
+		private BaseBuilder(BuilderOpts<Record, V, R> options) {
 			super(options);
 		}
 
@@ -85,21 +77,30 @@ public class Membership {
 
 		public class MembershipBuilderGroup {
 	        public MembershipBuilderCohort groupId(String groupId){
-	            RecordBuilder.this.setGroupId(groupId);
+	            BaseBuilder.this.setGroupId(groupId);
 	            return new MembershipBuilderCohort();
 	        }
 	    }
 	    public class MembershipBuilderCohort {
 	        public MembershipBuilderPerson cohortId(String cohortId){
-		        RecordBuilder.this.setCohortId(cohortId);
+		        BaseBuilder.this.setCohortId(cohortId);
 	            return new MembershipBuilderPerson();
 	        }
 	    }
 	    public class MembershipBuilderPerson {
 	        public R membershipId(String membershipId){
-		        RecordBuilder.this.setMembershipId(membershipId);
+		        BaseBuilder.this.setMembershipId(membershipId);
 	            return finalizeInstance();
 	        }
 	    }
+	}
+
+	public static class Builder extends BaseBuilder<Membership,Membership,Builder> {
+		public Builder(Record record) { super(BuilderOpts.build(record).toValue(Membership::new)); }
+		public Builder() { this(new Record()); }
+		public static Builder.MembershipBuilderGroup start(){ return new Builder().new MembershipBuilderGroup(); }
+		public static class Fluent<R> extends BaseBuilder<Membership,R,Fluent<R>> {
+			public Fluent(Consumer<Membership> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+		}
 	}
 }
