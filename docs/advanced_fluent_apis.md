@@ -5,7 +5,7 @@ Author: Matt Stevenson <matt@pagemodel.org>
 ```
 
 
-This is a guide to Advanced Techniques for Generic Types and their practical use in software engineering.  All code in this guide is written in Java 8, you do not need to upgrade your Java to use these techniques.
+This is a guide to Advanced Techniques for Generic Types and their practical use in software engineering.  All code in this guide is written in Java 8, you do not need to upgrade your Java to use these techniques. 
 
 It will explore the design and type-parameters used in the FBound `BuilderBase<T,V,R,B extends BuilderBase<T,V,R,? super B>>`.  By the end of this guide, if I have done my job, you will understand why these are **fundamental type parameters** for generic classes.  Each with special properties that can combine to make a *more*-generic type with very interesting behaviors.
 
@@ -94,7 +94,7 @@ public class UserBuilder {
 	}
 }
 ```
-> In practice we would likely not hold and modify an actual `User` instance, but some `UserRecord` that would be used to build and populate a full `User` object in the `finalizeUser` method. The _shape_ of the builder, the method signatures, would be the same.
+> In practice, we would likely not hold and modify an actual `User` instance, but some `UserRecord` that would be used to build and populate a full `User` object in the `finalizeUser` method.  In the `Effective Builder Pattern`, instead of a `UserRecord` the `UserBuilder` contains the individual fields used to create the `User`.  We will look more at these approaches later.  For now, I'll say the general _shape_ of the builder, the method signatures, will be the same.
 
 We can start building some `Users`:
 ```java
@@ -1834,34 +1834,622 @@ As displayed by `IntelliJ` with automatic type annotations:
 
 [img todo](screenshot)
 
-## The Seven Generics Type Patterns
-
-We began with a concrete `UserBuilder` with no type parameter, this is the first pattern, the trivial type with no parameters.  
-
-0`none` - No Parameters - Concrete Builder
-
-We then made three different version to fix three different problems.  Each problem introduced a specific type parameter.
-These are the 3 fundamental patterns:
-1. `<R>` - Return Value - Chainable Builder
-2. `<U extends User>` - Configuration Type - Configurable Builder
-3. `<UB extends UserBuilder<UB>>` - Self Type - F-Polymorphic Builder  
-    * or `<UB extends UserBuilder<? super UB>>` - FL-Polymorphic Builder
-
-We can combine those patterns in different ways, giving us 4 compound patterns:
-
-4. `<U extends User, R>` - Configurable Chainable Builder
-5. `<R, UB extends UserBuilder<R, UB>>` - Configurable F-Polymorphic Builder
-6. `<U extends User, UB extends UserBuilder<U, R, UB>>` - Chainable F-Polymorphic Builder
-7. `<U extends User, R, UB extends UserBuilder<U, R, UB>>` - Configurable Chainable F-Polymorphic Builder
-
-These 7 patterns are not limited to Builder types.  I view these as the fundamental types useful for all fluent APIs.  I have encountered these same patterns in multiple domains creating fluent and non-fluent apis.
-
 Next we'll look at adding one more type parameter specific to Builder types, separate types for a Record to be modified by the Builder, and a Value to be constructed from the Record. 
 
-## A Fourth Parameter - Adding a UserRecord and a User
+## A Fourth Parameter - Adding a UserRecord
 
+So far we've been working with a `UserBuilder` which takes a constructed `User` object and configures it.  Many Builders are built this way, but often Builders are made to collect a set of parameters needed for constructing an object.  This is the design of the `Effective Builder` which we'll look at in some detail.  The outcome is the same, the Builder provides a fully instantiated object, but the implementations necessarily differ.
+
+A common pattern is to define the necessary fields within the Builder itself and set those.  Then use those fields to create the instance.  I have found it is useful to take it one step further and define a serializable `UserRecord` to hold the builder fields, and the builder has a `UserRecord` instead of having the fields directly.  I have found that a serializable record is useful in many other contexts like messaging, import/export, third-party integration, reporting, logging, and testing.
+
+The example `UserBuilder` has a `User` instance, sets its fields, and then returns that `User`.
+
+We would expect a real `UserBuilder` to instead:
+1. have a `UserRecord` instance
+2. set the record fields
+3. create a full `User` instance from the `UserRecord`
+4. do something with the `User`
+
+Since out `User` has `Memberships`, we will make the same changes for that class by adding a `MembershipRecord`.
+
+Our `MembershipRecord` and `UserRecord` will be very simple:
+```java
+public class MembershipRecord {
+    public String groupId;
+    public String cohortId;
+    public String membershipId;
+}
+```
+```java
+public class UserRecord {
+    public String name;
+    public Date date;
+    public Map<String,String> opts = new HashMap<>();
+    public MembershipRecord primaryMembership;
+    public MembershipRecord secondaryMembership;
+    public List<MembershipRecord> memberships = new ArrayList<>();
+}
+```
+We'll update the `Membership` and `User` classes to construct from a record.  We'll also hide the field setters to better represent a real-world object where some fields cannot be changed after the object in created.
+```java
+public class Membership {
+    private String groupId;
+    private String cohortId;
+    private String membershipId;
+
+    public Membership(MembershipRecord record){
+        this.groupId = record.groupId;
+        this.cohortId = record.cohortId;
+        this.membershipId = record.membershipId;
+    }
+
+    public String getGroupId() {
+        return groupId;
+    }
+
+    public String getCohortId() {
+        return cohortId;
+    }
+
+    public String getMembershipId() {
+        return membershipId;
+    }
+}
+```
+```java
+public class User {
+    private String name;
+    private Date date;
+    private Map<String,String> opts;
+    private Membership primaryMembership;
+    private Membership secondaryMembership;
+    private List<Membership> memberships;
+
+    public User(UserRecord record){
+        this.name = record.name;
+        this.date = record.date;
+        this.primaryMembership = new Membership(record.primaryMembership);
+        this.secondaryMembership = new Membership(record.secondaryMembership);
+        this.memberships = record.memberships.stream().map(Membership::new).collect(Collectors.toList());
+        this.opts = record.opts;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public Date getDate() {
+        return date;
+    }
+
+    public String getOption(String key) {
+        return opts.get(key);
+    }
+
+    public Membership getPrimaryMembership() {
+        return primaryMembership;
+    }
+
+    public Membership getSecondaryMembership() {
+        return secondaryMembership;
+    }
+
+    public List<Membership> getMemberships() {
+        return memberships;
+    }
+}
+```
+
+We expect a `UserBuilder` to build a `User` from a `UserRecord`.  We will call methods on the `UserBuilder` to set fields on the `UserRecord`.  When done we will construct a `User` to be consumed.
+
+Rather than take a `User` instance in the constructor it will take a `UserRecord`.  The `Consumer<User> setter` will continue to consume a `User`.  This is separating the input and output types, they are no longer bound to be the same.  In order to convert the `UserRecord` to a `User` we will use a `Function<UserRecord,User> factory`.  For this example the `factory` function will be `record -> new User(record)`, in practice this may be much more complex.  Instead of having a `Function` constructor parameter, a `User build(UserRecord record)` method could be added and overridden when a change is neede.
+
+Instead of hardcoding the `UserRecord` type, we will add a `UR extends UserRecord` parameter in case we need to create a separate `FacilitatorRecord`.
+```java
+public class UserBuilder<UR extends UserRecord, U extends User, R, UB extends UserBuilder<UR, U, R, ? super UB>>
+```
+
+We've done a lot of work building up to `<U extends User, R, UB extends UserBuilder<U, R, ? super UB>>`.  At each step we added type parameters to make our `UserBuilder`more flexible.  It is easy to add type parameter with the opposite effect.  The type parameters that have been added are special in that they all relax existing type constraints rather than impose new constraints.
+
+Adding this new `UR extends UserRecord` is different in that it is not relaxing an existing constraint but adding a new constraint.  Our builder is now bound to two different incompatible types.
+
+For reasons we'll discuss more below, we will need to change the `U extends User` parameter to be an unbounded `U`, and we're allowed to do that since our `UserBuilder` methods now work with a `UserRecord` instead of a `User`.
+
+```java
+public class UserBuilder<UR extends UserRecord, U, R, UB extends UserBuilder<UR, U, R, ? super UB>> {
+    protected Consumer<U> setter;
+    protected Supplier<R> returnRef;
+    protected UR userRecord;
+    protected Function<UR,U> factory;
+    protected U instance;
+    
+    public UserBuilder(UR userRecord, Consumer<U> setter, Function<UR,U> factory, Supplier<R> returnRef) {
+        this.setter = setter;
+        this.returnRef = returnRef;
+        this.userRecord = userRecord;
+        this.factory = factory;
+    }
+
+    public UB setName(String name) {
+        userRecord.name = name;
+        return (UB)this;
+    }
+
+    public UB setDate(Date date) {
+        userRecord.date = date;
+        return (UB)this;
+    }
+
+    public UB setOption(String key, String value){
+        userRecord.opts.put(key, value);
+        return (UB)this;
+    }
+
+    public MembershipBuilder<UB>.MembershipBuilderGroup setPrimaryMembership(){
+        return MembershipBuilder.start(m -> userRecord.primaryMembership = m, (UB)this);
+    }
+
+    public R finalizeUser(){
+        instance = factory.apply(userRecord);
+        setter.accept(instance);
+        return returnRef.get();
+    }
+    
+    public static <T extends UserBuilder<UserRecord, User, User, ? super T>> T standalone(){
+        T builder = (T)new UserBuilder<>(u -> {}, (Supplier<User>)null, new UserRecord(), (record) -> new User(record));
+        builder.returnRef = () -> builder.instance;
+        return builder;
+    }
+}
+```
+
+The `UserBuilder` now has
+```java
+protected UR userRecord;
+protected Function<UR,U> factory;
+```
+Both are parameters of the constructor.
+
+All the setter methods now set values on the `UserRecord` instead of the `User`.  And, it is only in the `finalizeUser` that we use the `factory` Function to convert the `UserRecord` to a `User`.
+
+Our `Builder` is no longer using the `User` type directly, but rather through a `Function` and `Consumer` that are passed in.  This is what allowed use to remove the `U extends User` constraint and keep the `UR` and `U` type parameters compatible and the method signature unchanged.
+
+In this code we are building up a `UserRecord` which can be used to build a `User` as in the `standalone` builder, but it could be used for other purposes.  You may want to simply build the `UserRecord` and hold on to it for later instead of building the `User` object.
+
+```java
+public static <T extends UserBuilder<UserRecord, UserRecord, UserRecord, ? super T>> T recordBuilder(){
+        ...
+}
+```
+
+This is the reason we needed to change `U extends User` to be unbounded.  To make this `recordBuilder` we need to set `U` to `UserRecord` which is incompatible with `User`.
+
+You may be wondering when we need to this, but look no further than the `UserRecord`
+```java
+public class UserRecord {
+    public String name;
+    public Date date;
+    public Map<String,String> opts = new HashMap<>();
+    public MembershipRecord primaryMembership;
+    public MembershipRecord secondaryMembership;
+    public List<MembershipRecord> memberships = new ArrayList<>();
+}
+```
+
+This holds `MembershipRecord` instead of `Membership`.  Our `MembershipBuilder` will need to be able to build a `MembershipRecord` for the `UserRecord` or a full `Membership` standalone.  We would want to make the same changes to `Roster`, adding a `RosterRecord` which would hold a `FacilitatorRecord` instead of a `Facilitator`.
+
+At this point, what we have is a `UserRecordBuilder` which can become a `UserBuilder` or adopt other properties.
 
 ## Deriving the BuilderBase
+Deriving a generic `BuilderBase` from our `UserBuilder` is quite easy at this point.  We'll remove the `UR extends UserRecord` constraint and the setters using the `UserRecord` instance.
 
+
+```java
+public class UserBuilder<UR, U, R, UB extends UserBuilder<UR, U, R, ? super UB>> {
+    protected Consumer<U> setter;
+    protected Supplier<R> returnRef;
+    protected UR userRecord;
+    protected Function<UR,U> factory;
+    protected U instance;
+    
+    public UserBuilder(UR userRecord, Consumer<U> setter, Function<UR,U> factory, Supplier<R> returnRef) {
+        this.setter = setter;
+        this.returnRef = returnRef;
+        this.userRecord = userRecord;
+        this.factory = factory;
+    }
+
+    public R finalizeUser(){
+        instance = factory.apply(userRecord);
+        setter.accept(instance);
+        return returnRef.get();
+    }
+}
+```
+
+This is the heart of the F-Bound `BuilderBase`.  In the F-Bound project, I have only changed the names of parameters, variables, and methods to be more generic.  And, the F-Bound `BuilderOpts` allows us to more easily work with the builder parameters.
+
+Here is our final `BuilderBase` class:
+```java
+public abstract class BuilderBase<T,V,R,B extends BuilderBase<T,V,R,? super B>> {
+	protected Supplier<T> instanceRef;
+	protected Function<T,V> factory;
+	protected Consumer<V> consumer;
+	protected Supplier<R> returnRef;
+	protected V builtValue = null;
+	protected B self = (B) this;
+
+	protected BuilderBase(Supplier<T> instanceRef, Function<T,V> factory, Consumer<V> consumer, Supplier<R> returnRef) {
+		this.instanceRef = instanceRef;
+		this.factory = factory;
+		this.consumer = consumer;
+		this.returnRef = returnRef;
+	}
+
+	protected BuilderBase(T instance, Function<T,V> factory, Consumer<V> consumer, Supplier<R> returnRef) {
+		this(() -> instance, factory, consumer, returnRef);
+	}
+
+	protected BuilderBase(BuilderOpts<T,V,R> options) {
+		this(options.supplier, options.factory, options.consumer, options.returnSupplier);
+		options.builderSetup.accept(this);
+	}
+    
+	protected R finalizeInstance() {
+		builtValue = factory.apply(instanceRef.get());
+		consumer.accept(builtValue);
+		return returnRef.get();
+	}
+}
+```
+
+Using this as a base class, here is the final `User`, `UserRecord`, and `Builders` together:
+```java
+public class User {
+	private String name;
+	private Date date;
+	private Map<String,String> opts;
+	private Membership primaryMembership;
+	private Membership secondaryMembership;
+
+	public User(Record record){
+		this.name = record.name;
+		this.date = record.date;
+		this.primaryMembership = new Membership.Builder(record.primaryMembership).finalizeMembership();
+		this.secondaryMembership = new Membership.Builder(record.secondaryMembership).finalizeMembership();
+		this.opts = record.opts;
+	}
+
+	public String getName() {
+	    return name;
+	}
+
+	public Date getDate() {
+	    return date;
+	}
+
+	public String getOption(String key) {
+	    return opts.get(key);
+	}
+
+	public Membership getPrimaryMembership() {
+	    return primaryMembership;
+	}
+
+	public Membership getSecondaryMembership() {
+	    return secondaryMembership;
+	}
+
+	public static class Record {
+		public String name;
+		public Date date;
+		public Map<String,String> opts = new HashMap<>();
+		public Membership.Record primaryMembership;
+		public Membership.Record secondaryMembership;
+
+		public static class Builder extends BaseBuilder<Record,Record,Record,Builder> {
+			public Builder(Record record) { super(BuilderOpts.build(record)); }
+			public Builder() { this(new Record()); }
+			public static class Fluent<R> extends BaseBuilder<Record,Record,R,Fluent<R>> {
+				public Fluent(Consumer<Record> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+			}
+		}
+	}
+
+	public static class BaseBuilder<T extends Record, V, R, B extends BaseBuilder<T,V,R,? super B>> extends BuilderBase<T,V,R,B> {
+		public BaseBuilder(BuilderOpts<T,V,R> options) { super(options); }
+
+		public B setName(String name) {
+			instanceRef.get().name = name;
+			return self;
+		}
+
+		public B setDate(Date date) {
+			instanceRef.get().date = date;
+			return self;
+		}
+
+		public B setOption(String key, String value){
+			instanceRef.get().opts.put(key, value);
+			return self;
+		}
+
+		public Membership.Record.Builder.Fluent<B>.MembershipBuilderGroup setPrimaryMembership(){
+			return Membership.Record.Builder.Fluent.start(m -> instanceRef.get().primaryMembership = m, () -> self);
+		}
+
+		public Membership.Record.Builder.Fluent<B>.MembershipBuilderGroup setSecondaryMembership(){
+			return Membership.Record.Builder.Fluent.start(m -> instanceRef.get().secondaryMembership = m, () -> self);
+		}
+
+		public R finalizeUser(){
+			return super.finalizeInstance();
+		}
+	}
+
+	public static class Builder extends BaseBuilder<Record,User,User,Builder> {
+		public Builder(Record record) { super(BuilderOpts.build(record).toValue(User::new)); }
+		public Builder() { this(new Record()); }
+		public static class Fluent<R> extends BaseBuilder<Record,User,R,Fluent<R>> {
+			public Fluent(Consumer<User> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+		}
+	}
+}
+```
+This defines `User`, `User.Recored`, `User.BuilderBase`, `User.Builder`, `User.Builder.Fluent`, `User.Record.Builder`, and `User.Record.Builder.Fluent`.  We have 5 different `Builders` covering all of our building needs.
+
+Here is our `Facilitator` extending `User`:
+```java
+public class Facilitator extends User {
+	/* New Facilitator fields go here */
+
+	public Facilitator(Record record) {
+		super(record);
+		/* Set Facilitator fields from Facilitator.Record here */
+	}
+
+	/* New Facilitator methods go here */
+
+	public static class Record extends User.Record {
+		/* New Facilitator Record fields go here */
+
+		public static class Builder extends BaseBuilder<Record,Record,Record, Builder> {
+			public Builder(Record record) { super(BuilderOpts.build(record)); }
+			public Builder() { this(new Record()); }
+			public static class Fluent<R> extends BaseBuilder<Record,Record,R, Builder.Fluent<R>> {
+				public Fluent(Consumer<Record> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+			}
+		}
+	}
+
+	public static class BaseBuilder<T extends Record,V,R,B extends BaseBuilder<T,V,R,? super B>> extends User.BaseBuilder<T,V,R,B> {
+		public BaseBuilder(BuilderOpts<T,V,R> options) { super(options); }
+		/* New Facilitator Builder methods go here */
+	}
+
+	public static class Builder extends BaseBuilder<Record,Facilitator,Facilitator,Builder> {
+		public Builder(Record record) { super(BuilderOpts.build(record).toValue(Facilitator::new)); }
+		public Builder() { this(new Record()); }
+		public static class Fluent<R> extends BaseBuilder<Record,Facilitator,R,Fluent<R>> {
+			public Fluent(Consumer<Facilitator> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+		}
+	}
+}
+```
+Our `Facilitator` extends `User` and `Facilitator.Record` extends `User.Record`, and just in the same way our `Facilitator.BuilderBase` extends `User.BuilderBase` without needing to override or redefine any code.  We get the same 4 `Builder`, `Builder.Fluent`, `Record.Builder`, and `Record.Builder.Fluent` builder classes that trace back from `Facilitator.BuilderBase` to `User.BuilderBase`.
+
+Here is the `Membership` and builders used by `User` and `Facilitator`:
+```java
+public class Membership {
+    String groupId;
+    String cohortId;
+    String membershipId;
+
+	public Membership(Record record){
+		if(record == null) return;
+		this.groupId = record.groupId;
+		this.cohortId = record.cohortId;
+		this.membershipId = record.membershipId;
+	}
+
+    public String getGroupId() {
+        return groupId;
+    }
+
+    public String getCohortId() {
+        return cohortId;
+    }
+
+    public String getMembershipId() {
+        return membershipId;
+    }
+
+	public static class Record {
+	    public String groupId;
+	    public String cohortId;
+	    public String membershipId;
+
+		public static class Builder extends BaseBuilder<Record,Record,Builder> {
+			public Builder(Record record) { super(BuilderOpts.build(record)); }
+			public Builder() { this(new Record()); }
+			public static class Fluent<R> extends BaseBuilder<Record,R,Fluent<R>> {
+				public Fluent(Consumer<Record> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+				public static <R> Fluent<R>.MembershipBuilderGroup start(Consumer<Record> consumer, Supplier<R> returnRef){
+					return new Fluent<>(consumer, returnRef).new MembershipBuilderGroup();
+				}
+			}
+		}
+	}
+
+	public static class BaseBuilder<V,R,B extends BaseBuilder<V,R,? super B>> extends BuilderBase<Record,V,R,B> {
+		public static <V,R,B extends BaseBuilder<V,R,? super B>> B.MembershipBuilderGroup start(BuilderOpts<Record,V,R> options){
+			 return ((B)new BaseBuilder<>(options)).new MembershipBuilderGroup();
+		}
+
+		private BaseBuilder(BuilderOpts<Record, V, R> options) {
+			super(options);
+		}
+
+		public B setGroupId(String id){
+			instanceRef.get().groupId = id;
+			return self;
+		}
+
+		public B setCohortId(String id){
+			instanceRef.get().cohortId = id;
+			return self;
+		}
+
+		public B setMembershipId(String id){
+			instanceRef.get().membershipId = id;
+			return self;
+		}
+
+		public R finalizeMembership(){
+			return super.finalizeInstance();
+		}
+
+		public class MembershipBuilderGroup {
+	        public MembershipBuilderCohort groupId(String groupId){
+	            BaseBuilder.this.setGroupId(groupId);
+	            return new MembershipBuilderCohort();
+	        }
+	    }
+	    public class MembershipBuilderCohort {
+	        public MembershipBuilderPerson cohortId(String cohortId){
+		        BaseBuilder.this.setCohortId(cohortId);
+	            return new MembershipBuilderPerson();
+	        }
+	    }
+	    public class MembershipBuilderPerson {
+	        public R membershipId(String membershipId){
+		        BaseBuilder.this.setMembershipId(membershipId);
+	            return finalizeInstance();
+	        }
+	    }
+	}
+
+	public static class Builder extends BaseBuilder<Membership,Membership,Builder> {
+		public Builder(Record record) { super(BuilderOpts.build(record).toValue(Membership::new)); }
+		public Builder() { this(new Record()); }
+		public static Builder.MembershipBuilderGroup start(){ return new Builder().new MembershipBuilderGroup(); }
+		public static class Fluent<R> extends BaseBuilder<Membership,R,Fluent<R>> {
+			public Fluent(Consumer<Membership> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+		}
+	}
+}
+```
+
+We have all the same builders as in `User`, while retaining the *guided* builder behavior with these three inner classes:
+```java
+    public class MembershipBuilderGroup {
+        public MembershipBuilderCohort groupId(String groupId){
+            BaseBuilder.this.setGroupId(groupId);
+            return new MembershipBuilderCohort();
+        }
+    }
+    public class MembershipBuilderCohort {
+        public MembershipBuilderPerson cohortId(String cohortId){
+            BaseBuilder.this.setCohortId(cohortId);
+            return new MembershipBuilderPerson();
+        }
+    }
+    public class MembershipBuilderPerson {
+        public R membershipId(String membershipId){
+            BaseBuilder.this.setMembershipId(membershipId);
+            return finalizeInstance();
+        }
+    }
+```
+
+And finally, the `Roster` and its builders:
+```java
+public class Roster {
+    private String name;
+    private Facilitator facilitator;
+    private List<Membership> memberships;
+
+	public Roster(Record record) {
+		this.name = record.name;
+		this.facilitator = new Facilitator.Builder(record.facilitator).finalizeUser();
+		this.memberships = record.memberships.stream().map(r -> new Membership.Builder(r).finalizeMembership()).collect(Collectors.toList());
+	}
+
+	public String getName() {
+        return name;
+    }
+
+    public Facilitator getFacilitator() {
+        return facilitator;
+    }
+
+    public List<Membership> getMemberships() {
+        return memberships;
+    }
+
+	public static class Record {
+		public String name;
+		public Facilitator.Record facilitator;
+		public List<Membership.Record> memberships = new ArrayList<>();
+
+		public static class Builder extends BaseBuilder<Record,Record> {
+			public Builder(Record record) { super(BuilderOpts.build(record)); }
+			public Builder() { this(new Record()); }
+			public static class Fluent<R> extends BaseBuilder<Record,R> {
+				public Fluent(Consumer<Record> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+			}
+		}
+	}
+
+	public static class BaseBuilder<V,R> extends BuilderBase<Record,V,R, BaseBuilder<V,R>>
+			implements Accept<BaseBuilder<V,R>>, Apply<BaseBuilder<V,R>>, Edit<Record, BaseBuilder<V,R>> {
+		public BaseBuilder(BuilderOpts<Record,V,R> options) { super(options); }
+
+		public BaseBuilder<V,R> setName(String name) {
+	        instanceRef.get().name = name;
+	        return this;
+	    }
+
+	    public Facilitator.Record.Builder.Fluent<BaseBuilder<V,R>> buildFacilitator() {
+		    return new Facilitator.Record.Builder.Fluent<>(r -> instanceRef.get().facilitator = r, () -> self);
+	    }
+
+	    public Membership.Record.Builder.Fluent<BaseBuilder<V,R>>.MembershipBuilderGroup addMembership(){
+	        return Membership.Record.Builder.Fluent.start(m -> instanceRef.get().memberships.add(m), () -> self);
+	    }
+
+		public R finalizeRoster(){
+			return super.finalizeInstance();
+		}
+	}
+
+	public static class Builder extends BaseBuilder<Roster,Roster> {
+		public Builder(Record record) { super(BuilderOpts.build(record).toValue(Roster::new)); }
+		public Builder() { this(new Record()); }
+		public static class Fluent<R> extends BaseBuilder<Roster,R> {
+			public Fluent(Consumer<Roster> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+		}
+	}
+}
+```
+
+Our `Membership`, `User`, `Facilitator`, and `Roster` follow a common pattern for `Record` and `Builder` classes.
+
+The `Record.Builder` can be re-used as a `Record` factory object in place of calling the `Record` constructor directly, and `Builder` can be used as a factory object to create a type from a `Record`.  You can see an example of this in the `Roster` class for working with `Facilitator` and `Membership` records and objects. 
+
+The remarkable thing is that our `Builder` classes can now follow the same inheritance and composition patterns as the types they build.  And, they are parameterized with the various types involved for use in more abstract type-base dispatching that often result in something like an `AbstractFactoryFactoryFactory` class.
+## The Four Generics Types
+
+We began with a concrete `UserBuilder` with no type parameter, this is the first pattern, the trivial type with no parameters.
+
+0. `none` - No Parameters - Concrete Builder
+
+We then made three different version to fix three different problems.  Each problem introduced a specific type parameter.
+These are the 4 patterns:
+1. `<T extends UserRecord>` - Record holding internal state
+2. `<V>` - Output Type
+3. `<R>` - Return Value for standalone of chainable builders
+4. `<B extends UserBuilder<B>>` - Self Type - F-Polymorphic Builder
+    * or `<B extends UserBuilder<? super B>>` - FL-Polymorphic Builder
 
 ## Fun with Type-Bound Interfaces
