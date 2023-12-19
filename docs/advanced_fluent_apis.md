@@ -2224,6 +2224,85 @@ public class User {
 ```
 This defines `User`, `User.Recored`, `User.BuilderBase`, `User.Builder`, `User.Builder.Fluent`, `User.Record.Builder`, and `User.Record.Builder.Fluent`.  We have 5 different `Builders` covering all of our building needs.
 
+A re-usable`User.BaseBuilder` base class is created, fully-parameterized with `T extends Record`, `V`, `R`, and the f-bound `B extends BaseBuilder`.  Our builder methods are all defined here.  The name `User.BaseBuilder` is chosen so as not to conflict with the FBound `BuilderBase` name and require us to use the fully-qualified class name.
+
+Below the `BaseBuilder` a concrete `User.Builder` class is defined which extends `BaseBuilder<Record,User,User,Builder>`.  This is the typical builder which builds and returns a `User`.
+```java
+	public static class Builder extends BaseBuilder<Record,User,User,Builder> {
+		public Builder(Record record) { super(BuilderOpts.build(record).toValue(User::new)); }
+		public Builder() { this(new Record()); }
+	}
+```
+This `Builder` simply has 2 constructors, one  accepts an existing `Record` instance and defines `User::new` as the factory `Function`.  This constructor allows the `Builder` to be re-used as a simple factory for creating a `User` from an existing `Record`.  Here we're only using the `User` constructor, but when additional setup logic is needed this constructor is a central place to define it.  In the `User` constructor, we use the `Membership.Builder` to create a `Membership`:
+```java
+this.primaryMembership = new Membership.Builder(record.primaryMembership).finalizeMembership();
+this.secondaryMembership = new Membership.Builder(record.secondaryMembership).finalizeMembership();
+```
+
+The second constructor take no parameters and contains the logic for creating a new `Record` instance.  The logic for creating a new `Record` is duplicated in `User.Record.Builder`.  To centralize the logic, it can be defined once in `User.Record.Bulder` and we would update the `User.Builder` constructor to use that.
+```java
+        //public Builder() { this(new Record()); }
+        public Builder() { this(new Record.Builder().finalizeUser()); }
+```
+This adds the small overhead of creating an extra object and calling a method to create `Record`.  We would use this approach to help maintainability when there is complex `Record` creation logic that cannot go in the `Record` constructor and we do not want to duplicate it.
+
+Inside the `User.Builder` the `User.Builder.Fluent` class is defined.
+
+```java
+public static class Fluent<R> extends BaseBuilder<Record,User,R,Fluent<R>> {
+    public Fluent(Consumer<User> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+}
+```
+This is the fluent builder which will pass the created `User` to a `Consumer` and return some other object to continue the fluent method chain.  This can be used to create a `User` and then provide an object with different actions to perform with the `User`.  This builder is typically the least-used of the 4 concrete builders.
+
+Inside the `User.Record` class, another pair of builders are defined; `User.Record.Builder` and `User.Record.Builder.Fluent`.
+
+```java
+    public static class Builder extends BaseBuilder<Record,Record,Record,Builder> {
+        public Builder(Record record) { super(BuilderOpts.build(record)); }
+        public Builder() { this(new Record()); }
+        public static class Fluent<R> extends BaseBuilder<Record,Record,R,Fluent<R>> {
+            public Fluent(Consumer<Record> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+        }
+    }
+```
+
+`User.Record.Builder` is a standalone builder to create and return a `User.Record` instance without building a full `User` instance.
+
+The `User.Record.Builder.Fluent` will build the `User.Record`, pass it to the `Consumer`, and then return some other object to continue the fluent method chain.  This is a very useful builder type, it can be used by other builders when needing to build a child object.  Our `User.Builder` uses the `Membership.Record.Builder.Fluent`:
+```java
+		public Membership.Record.Builder.Fluent<B>.MembershipBuilderGroup setPrimaryMembership(){
+			return Membership.Record.Builder.Fluent.start(m -> instanceRef.get().primaryMembership = m, () -> self);
+		}
+```
+The `Membership.Record.Builder.Fluent` creates a `Membership.Record`, sets it to the `User.Record.primaryMembership`, and then return the `User.Builder` to continue building the `User`.
+Below, you'll see the `Roster.Builder` does the same with the `Facilitator.Record.Builder.Fluent`.
+
+An interesting note about the `User.Record.Builder` and `User.Record.Builder.Fluent` is that it only references the `Record` class and not the `User`.  The code can be the same for every `*.Record.Builder`.  You will see the `User.Record`, `Facilitator.Record`, and `Roster.Record` have identical code:
+```java
+    public static class Record {
+        public static class Builder extends BaseBuilder<Record,Record,Record,Builder> {
+            public Builder(Record record) { super(BuilderOpts.build(record)); }
+            public Builder() { this(new Record()); }
+            public static class Fluent<R> extends BaseBuilder<Record,Record,R,Builder.Fluent<R>> {
+                public Fluent(Consumer<Record> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+            }
+        }
+    }
+```
+The `User.Builder` and `Facilitator.Builder` are very similar, but the code must be changed from `User` to `Facilitator`:
+```java
+    public static class Builder extends BaseBuilder<Record,User,User,Builder> {
+		public Builder(Record record) { super(BuilderOpts.build(record).toValue(User::new)); }
+		public Builder() { this(new Record()); }
+		public static class Fluent<R> extends BaseBuilder<Record,User,R,Fluent<R>> {
+			public Fluent(Consumer<User> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
+		}
+	}
+```
+
+Defining the 4 different concrete builders is inescapable boilerplate code.  It could be offloaded on to a code generator in the future.
+
 Here is our `Facilitator` extending `User`:
 ```java
 public class Facilitator extends User {
@@ -2794,9 +2873,8 @@ public class Book {
 }
 ```
 
-### Effective Builder and FBound Builder
 The `Effective Builder` viewed as an `FBound Builder` is a builder whose record is itself and returns the built value. `BuilderBase<B,V,V,B>`.  In this, we can see that the `FBound Builder` gives us a framework for classifying and speaking about the nuances of other builder approaches.
 
-An `Effective Builder` can be safely and easily converted to an `FBound Builder` with the full range of builder behaviors.
+An `Effective Builder` can be safely and easily converted to an `FBound Builder` giving access to the full range of builder behaviors.
 
 ## Fun with Type-Bound Interfaces
