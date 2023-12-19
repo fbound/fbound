@@ -1963,7 +1963,7 @@ public class UserBuilder<UR extends UserRecord, U, R, UB extends UserBuilder<UR,
     protected Function<UR,U> factory;
     protected U instance;
     
-    public UserBuilder(UR userRecord, Consumer<U> setter, Function<UR,U> factory, Supplier<R> returnRef) {
+    public UserBuilder(UR userRecord, Function<UR,U> factory, Consumer<U> setter, Supplier<R> returnRef) {
         this.setter = setter;
         this.returnRef = returnRef;
         this.userRecord = userRecord;
@@ -1996,7 +1996,7 @@ public class UserBuilder<UR extends UserRecord, U, R, UB extends UserBuilder<UR,
     }
     
     public static <T extends UserBuilder<UserRecord, User, User, ? super T>> T standalone(){
-        T builder = (T)new UserBuilder<>(u -> {}, (Supplier<User>)null, new UserRecord(), (record) -> new User(record));
+        T builder = (T)new UserBuilder<>(new UserRecord(), (record) -> new User(record), u -> {}, (Supplier<User>)null);
         builder.returnRef = () -> builder.instance;
         return builder;
     }
@@ -2008,7 +2008,7 @@ The `UserBuilder` now has
 protected UR userRecord;
 protected Function<UR,U> factory;
 ```
-Both are parameters of the constructor.
+Both are parameters of the constructor.  This new parameter has further generalized our builder to separate the Type representing the internal state and final built Type passed to the Consumer.
 
 All the setter methods now set values on the `UserRecord` instead of the `User`.  And, it is only in the `finalizeUser` that we use the `factory` Function to convert the `UserRecord` to a `User`.
 
@@ -2045,29 +2045,55 @@ Deriving a generic `BuilderBase` from our `UserBuilder` is quite easy at this po
 
 
 ```java
-public class UserBuilder<UR, U, R, UB extends UserBuilder<UR, U, R, ? super UB>> {
-    protected Consumer<U> setter;
+public class BuilderBase<T, V, R, B extends BuilderBase<T, V, R, ? super B>> {
+    protected Supplier<T> instanceRef;
+    protected Function<T,V> factory;
+    protected Consumer<V> consumer;
     protected Supplier<R> returnRef;
-    protected UR userRecord;
-    protected Function<UR,U> factory;
-    protected U instance;
-    
-    public UserBuilder(UR userRecord, Consumer<U> setter, Function<UR,U> factory, Supplier<R> returnRef) {
-        this.setter = setter;
-        this.returnRef = returnRef;
-        this.userRecord = userRecord;
-        this.factory = factory;
-    }
+    protected V builtValue = null;
 
-    public R finalizeUser(){
-        instance = factory.apply(userRecord);
-        setter.accept(instance);
+    protected BuilderBase(Supplier<T> instanceRef, Function<T,V> factory, Consumer<V> consumer, Supplier<R> returnRef) {
+        this.instanceRef = instanceRef;
+        this.factory = factory;
+        this.consumer = consumer;
+        this.returnRef = returnRef;
+    }
+    
+    protected BuilderBase(BuilderOpts<T,V,R> options) {
+        this(options.supplier, options.factory, options.consumer, options.returnSupplier);
+        options.builderSetup.accept(this);
+    }
+    
+    protected R finalizeInstance() {
+        builtValue = factory.apply(instanceRef.get());
+        consumer.accept(builtValue);
         return returnRef.get();
     }
 }
 ```
 
-This is the heart of the F-Bound `BuilderBase`.  In the F-Bound project, I have only changed the names of parameters, variables, and methods to be more generic.  And, the F-Bound `BuilderOpts` allows us to more easily work with the builder parameters.
+This is the F-Bound `BuilderBase`.  There is a new constructor taking an F-Bound `BuilderOpts`, this is a simple builder for the `Builder` parameters.  This greatly simplifies creating different types of builders, and avoids the need to pass `null` values and set them after construction as we have been doing.
+
+In our `UserBuilder` we are passing in and holding an instance of a `UserRecord`.  In the `BuilderBase` we have changed `T` to a `Supplier<T>`.  Typically, we are able to create a single instance of a `record` for our builder, and in those cases we can wrap that instance in a `Supplier`.  There can be situations where you may not have a single durable instance.  You may want to modify a particular object accessed through a `getter` which needs to be re-fetched for each use, or you may have some proxy `record` object which requires a series of method calls before or after each use.  In these cases we need the `BuilderBase` to support a `Supplier` for it to work with our existing types.  If the `BuilderBase` did not support a `Supplier`, we would be forced to override and re-write the `BuilderBase` or write a special wrapper class to use as the `record`.
+
+An example of this can be seen in [page-model-tools](https://github.com/pagemodel/page-model-tools), instead of `Builders` it is concerned with fluent `Tester` types following a similar generic type parameter pattern.  In using Selenium to test `WebElements`, a located instance of a `WebElement` can go stale and throw an exception if used.  The `WebElementTester` must re-fetch the `WebElement` instead of holding a single instance to avoid a stale element exception. 
+
+
+## The Four Generics Types
+
+We began with a concrete `UserBuilder` with no type parameter, this is the first pattern, the trivial type with no parameters.
+
+0. `none` - No Parameters - Concrete Builder
+
+We then made three different version to fix three different problems.  Each problem introduced a specific type parameter.
+These are the 4 patterns:
+1. `<T extends UserRecord>` - Record holding internal state
+2. `<V>` - Output Type
+3. `<R>` - Return Value for standalone of chainable builders
+4. `<B extends UserBuilder<B>>` - Self Type - F-Polymorphic Builder
+    * or `<B extends UserBuilder<? super B>>` - FL-Polymorphic Builder
+
+## Final User, Records, and Builders
 
 Here is our final `BuilderBase` class:
 ```java
@@ -2213,10 +2239,10 @@ public class Facilitator extends User {
 	public static class Record extends User.Record {
 		/* New Facilitator Record fields go here */
 
-		public static class Builder extends BaseBuilder<Record,Record,Record, Builder> {
+		public static class Builder extends BaseBuilder<Record,Record,Record,Builder> {
 			public Builder(Record record) { super(BuilderOpts.build(record)); }
 			public Builder() { this(new Record()); }
-			public static class Fluent<R> extends BaseBuilder<Record,Record,R, Builder.Fluent<R>> {
+			public static class Fluent<R> extends BaseBuilder<Record,Record,R,Builder.Fluent<R>> {
 				public Fluent(Consumer<Record> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder()).asFluent(consumer, returnRef)); }
 			}
 		}
@@ -2437,19 +2463,340 @@ Our `Membership`, `User`, `Facilitator`, and `Roster` follow a common pattern fo
 
 The `Record.Builder` can be re-used as a `Record` factory object in place of calling the `Record` constructor directly, and `Builder` can be used as a factory object to create a type from a `Record`.  You can see an example of this in the `Roster` class for working with `Facilitator` and `Membership` records and objects. 
 
-The remarkable thing is that our `Builder` classes can now follow the same inheritance and composition patterns as the types they build.  And, they are parameterized with the various types involved for use in more abstract type-base dispatching that often result in something like an `AbstractFactoryFactoryFactory` class.
-## The Four Generics Types
+Our `Builder` classes can now follow the same inheritance and composition patterns as the types they build.  And, they are parameterized with the various types involved for use in more abstract type-base dispatching that often result in something like an `AbstractFactoryFactoryFactory` class.
 
-We began with a concrete `UserBuilder` with no type parameter, this is the first pattern, the trivial type with no parameters.
 
-0. `none` - No Parameters - Concrete Builder
+## Analyzing the Effective Builder Pattern
 
-We then made three different version to fix three different problems.  Each problem introduced a specific type parameter.
-These are the 4 patterns:
-1. `<T extends UserRecord>` - Record holding internal state
-2. `<V>` - Output Type
-3. `<R>` - Return Value for standalone of chainable builders
-4. `<B extends UserBuilder<B>>` - Self Type - F-Polymorphic Builder
-    * or `<B extends UserBuilder<? super B>>` - FL-Polymorphic Builder
+> The following code example is taken from: [https://blogs.oracle.com/javamagazine/post/exploring-joshua-blochs-builder-design-pattern-in-java](https://blogs.oracle.com/javamagazine/post/exploring-joshua-blochs-builder-design-pattern-in-java)
+>
+> This is an example of Joshua Bloch's **Effective Builder Pattern**
+```java
+public class Book {
+    private final String isbn;
+    private final String title;
+    private final Genre genre;
+    private final String author;
+    private final Year published;
+    private final String description;
+    private Book(Builder builder) {
+        this.isbn = builder.isbn;
+        this.title = builder.title;
+        this.genre = builder.genre;
+        this.author = builder.author;
+        this.published = builder.published;
+        this.description = builder.description;
+    }
+
+    public String getIsbn() {
+        return isbn;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public Genre getGenre() {
+        return genre;
+    }
+
+    public String getAuthor() {
+        return author;
+    }
+
+    public Year getPublished() {
+        return published;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public static class Builder {
+        private final String isbn;
+        private final String title;
+        private Genre genre;
+        private String author;
+        private Year published;
+        private String description;
+
+        public Builder(String isbn, String title) {
+            this.isbn = isbn;
+            this.title = title;
+        }
+
+        public Builder genre(Genre genre) {
+            this.genre = genre;
+            return this;
+        }
+
+        public Builder author(String author) {
+            this.author = author;
+            return this;
+        }
+
+        public Builder published(Year published) {
+            this.published = published;
+            return this;
+        }
+
+        public Builder description(String description) {
+            this.description = description;
+            return this;
+        }
+
+        public Book build() {
+            return new Book(this);
+        }
+    }
+
+}
+```
+This is not too different from versions of our `User` and `UserBuilder`.  We have a `Book` class with some fields set in the constructor.  The `Book.Builder` class has the same fields which are set through a fluent API, and a `build` method to create and return a `User`.
+
+Let's update the `Builder` to inherit from our `BuilderBase` and fill in the types.
+```java
+public static class Builder extends BuilderBase<BookRecord???, Book, Book, Builder>
+```
+We don't have a `BookRecord` type, instead the `Builder` has the fields and is the record type itself:
+```java
+public static class Builder extends BuilderBase<Builder, Book, Book, Builder>
+```
+
+Updating the `Builder` to use the `BuilderBase` methods and fields we get:
+```java
+public static class Builder extends BuilderBase<Builder,Book,Book,Builder> {
+    private final String isbn;
+    private final String title;
+    private Genre genre;
+    private String author;
+    private Year published;
+    private String description;
+
+    public Builder(String isbn, String title) {
+        super((Supplier<Builder>) null, r -> new Book(r), b -> {}, null);
+        super.instanceRef = () -> this;
+        super.returnRef = () -> super.builtInstance;
+        this.isbn = isbn;
+        this.title = title;
+    }
+
+    public Builder genre(Genre genre) {
+        this.genre = genre;
+        return this;
+    }
+
+    public Builder author(String author) {
+        this.author = author;
+        return this;
+    }
+
+    public Builder published(Year published) {
+        this.published = published;
+        return this;
+    }
+
+    public Builder description(String description) {
+        this.description = description;
+        return this;
+    }
+
+    public Book build() {
+        return super.finalizeInstance();
+    }
+}
+```
+We have to do some juggling in the constructor to set the record `Supplier` and return `Supplier` both to return the `Builder` itself.  This can be simplified using the `BuilderOpts` class.  The `build` method now calls the `finalizeInstance`, we have moved the `Book` constructor call from the `build` method to the `factory` function.
+
+Next, let's look at adding a separate `Record` class and parameterizing a `BaseBuilder`:
+```java
+public class Book {
+    ...
+    protected Book(Record record) {
+        this.isbn = record.isbn;
+        this.title = record.title;
+        this.genre = record.genre;
+        this.author = record.author;
+        this.published = record.published;
+        this.description = record.description;
+    }
+    ...
+
+    public static class Record {
+        public String isbn;
+        public String title;
+        public Genre genre;
+        public String author;
+        public Year published;
+        public String description;
+        
+        public Record(String isbn, String title){
+            this.isbn = isbn;
+            this.title = title;
+        }
+    }
+    
+    public static class BaseBuilder<T extends Record,V,R,B extends BaseBuilder<T,V,R,? super B>> extends BuilderBase<T,V,R,B> {
+        public BaseBuilder(BuilderOpts<T,V,R> options) { super(options); }
+
+        public B genre(Genre genre) {
+            instanceRef.get().genre = genre;
+            return self;
+        }
+
+        public B author(String author) {
+            instanceRef.get().author = author;
+            return self;
+        }
+
+        public B published(Year published) {
+            instanceRef.get().published = published;
+            return self;
+        }
+
+        public B description(String description) {
+            instanceRef.get().description = description;
+            return self;
+        }
+
+        public R build() {
+            return super.finalizeInstance();
+        }
+    }
+}
+```
+There is very little change from the earlier `Builder` to the `Record` and `BaseBuilder`.  The `Builder` constructor parameters for `isbn` and `title` have been moved to the `Record`.  From here we can add the four concrete `Book.Builder` and `Book.Record.Builder` as we did in `User` and `Facilitator`, making small modifications for `isbn` and `title` constructor parameters in the `Record`.
+
+For the `Book.Builder` we can copy the `User.Builder` changing any use of `User` to `Book`, and adding parameters for the `isbn` and `title`:
+
+```java
+    public static class Builder extends BaseBuilder<Record,Book,Book,Builder> {
+        public Builder(Record record) { super(BuilderOpts.build(record).toValue(Book::new)); }
+        public Builder(String isbn, String title) { this(new Record(isbn, title)); }
+        public static class Fluent<R> extends BaseBuilder<Record,Book,R,Fluent<R>> {
+            public Fluent(String isbn, String title, Consumer<Book> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder(isbn, title)).asFluent(consumer, returnRef)); }
+        }
+    }
+```
+
+This new `Builder` is a complete replacement for the original `Builder` with all expected methods. Any code using the old `Book.Builder` will continue working with this new FBound `Book.Builder`.
+
+For `Book.Record.Builder` we can copy the `User.Record.Builder` with no modification to the types, only adding the `isbn` and `title`:
+```java
+    public static class Builder extends BaseBuilder<Record,Record,Record,Builder> {
+        public Builder(Record record) { super(BuilderOpts.build(record)); }
+        public Builder(String isbn, String title) { this(new Record(isbn, title)); }
+        public static class Fluent<R> extends BaseBuilder<Record,Record,R, Fluent<R>> {
+            public Fluent(String isbn, String title, Consumer<Record> consumer,Supplier<R> returnRef) { super(BuilderOpts.from(new Builder(isbn, title)).asFluent(consumer, returnRef)); }
+        }
+    }
+```
+
+The full `Book` class with the `FBound Builder`:
+```java
+public class Book {
+	private final String isbn;
+	private final String title;
+	private final Genre genre;
+	private final String author;
+	private final Year published;
+	private final String description;
+	protected Book(Record record) {
+		this.isbn = record.isbn;
+		this.title = record.title;
+		this.genre = record.genre;
+		this.author = record.author;
+		this.published = record.published;
+		this.description = record.description;
+	}
+
+	public String getIsbn() {
+		return isbn;
+	}
+
+	public String getTitle() {
+		return title;
+	}
+
+	public Genre getGenre() {
+		return genre;
+	}
+
+	public String getAuthor() {
+		return author;
+	}
+
+	public Year getPublished() {
+		return published;
+	}
+
+	public String getDescription() {
+		return description;
+	}
+
+	public static class Record {
+		public String isbn;
+		public String title;
+		public Genre genre;
+		public String author;
+		public Year published;
+		public String description;
+
+		public Record(String isbn, String title){
+			this.isbn = isbn;
+			this.title = title;
+		}
+
+		public static class Builder extends BaseBuilder<Record,Record,Record,Builder> {
+			public Builder(Record record) { super(BuilderOpts.build(record)); }
+			public Builder(String isbn, String title) { this(new Record(isbn, title)); }
+			public static class Fluent<R> extends BaseBuilder<Record,Record,R, Fluent<R>> {
+				public Fluent(String isbn, String title, Consumer<Record> consumer,Supplier<R> returnRef) { super(BuilderOpts.from(new Builder(isbn, title)).asFluent(consumer, returnRef)); }
+			}
+		}
+	}
+	
+	public static class BaseBuilder<T extends Record,V,R,B extends BaseBuilder<T,V,R,? super B>> extends BuilderBase<T,V,R,B> {
+		public BaseBuilder(BuilderOpts<T,V,R> options) { super(options); }
+
+		public B genre(Genre genre) {
+			instanceRef.get().genre = genre;
+			return self;
+		}
+
+		public B author(String author) {
+			instanceRef.get().author = author;
+			return self;
+		}
+
+		public B published(Year published) {
+			instanceRef.get().published = published;
+			return self;
+		}
+
+		public B description(String description) {
+			instanceRef.get().description = description;
+			return self;
+		}
+
+		public R build() {
+			return super.finalizeInstance();
+		}
+	}
+
+	public static class Builder extends BaseBuilder<Record,Book,Book,Builder> {
+		public Builder(Record record) { super(BuilderOpts.build(record).toValue(Book::new)); }
+		public Builder(String isbn, String title) { this(new Record(isbn, title)); }
+		public static class Fluent<R> extends BaseBuilder<Record,Book,R,Fluent<R>> {
+			public Fluent(String isbn, String title, Consumer<Book> consumer, Supplier<R> returnRef) { super(BuilderOpts.from(new Builder(isbn, title)).asFluent(consumer, returnRef)); }
+		}
+	}
+}
+```
+
+### Effective Builder and FBound Builder
+The `Effective Builder` viewed as an `FBound Builder` is a builder whose record is itself and returns the built value. `BuilderBase<B,V,V,B>`.  In this, we can see that the `FBound Builder` gives us a framework for classifying and speaking about the nuances of other builder approaches.
+
+An `Effective Builder` can be safely and easily converted to an `FBound Builder` with the full range of builder behaviors.
 
 ## Fun with Type-Bound Interfaces
