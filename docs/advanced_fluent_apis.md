@@ -3024,7 +3024,25 @@ public interface Edit<T,B extends BuilderBase<T,?,?,B> & Edit<T,B>> extends Exte
 }
 ```
 
-And, because Java allows multiple interfaces, we can add both `Accept` and `Edit`:
+In `Edit` we defined an additional type parameter `T` for the builder record type, instead of using a wildcard as in `Accept`.  This shows how we can capture the type parameters of the builder within an `Extension`.
+
+Not only can you capture type parameters, you can impose constraints on those type.  We could create an `Extension` with `T extends UserRecord` which can only be implemented by a builder using a `UserRecord`, and allows the extension to access and make use of the internal `UserRecord`.  This extension could then be applied to any of our `User` or `Facilitator` builders.  
+In a similar fashion, a project could define a root `Record` type with special project-specific features, and use that as a base class for all other `Record` types.  A set of `Extensions` could be created providing special methods that make use of the root `Record` features.
+
+### Extensions for exposing access
+The `Edit` class is accessing the `protected` `instanceRef` field. As defined it will only work if it is in the same package as `BuilderBase`.  This means the FBound project is in a unique position to create an `Extension` with `protected` access to the `BuilderBase` by adding it to the same package.  Anyone trying to create a custom `Extension` is at a disadvantage and must work around the protected access.
+
+In FBound that disadvantage is addressed by adding the `ExtensionUtils` class to the `BuilderBase` package.  There is an `instance` method that exposes the `instanceRef` field only for a builder implementing `Extension`.  There are similar methods for each `protected` field.
+```java
+public static <T,B extends BuilderBase<T, ?, ?, B> & Extension<B>> T instance(Extension<B> extension) {
+    return ((B) extension).instanceRef.get();
+}
+```
+
+Through these `ExtensionUtil` methods, the `Extension` interface effectively changes the access control of the builder fields.  This empowers others to create custom `Extension` with the same privileges as the FBound project itself.
+
+### Extensions wrap-up
+Because Java allows multiple interfaces, we can add both `Accept` and `Edit`:
 ```java
 public static class Builder extends BaseBuilder<Record,User,User,Builder> 
         implements Accept<Builder>, Edit<Record,Builder> {
@@ -3033,4 +3051,22 @@ public static class Builder extends BaseBuilder<Record,User,User,Builder>
 ```
 Giving our builder both the `accept` and `edit` methods.
 
+I'll add here that the `BuilderBase` is defined in a very functional manner and isolates its internal state to its record instance.  It should be rare that a `Builder` subtype needs to add extra fields, subtypes will typically add new behavior using the existing `BuilderBase` fields.  
+Since subtypes generally do not add extra fields, the behavior that would be defined in a subtype could be defined in `default` methods of an `Extension` interface.  
+In practice, this gives our `BuilderBase` a pseudo-multiple-inheritance capability beyond what can typically be achieved in Java.
+
+
+In theory, you could define each individual builder method as an Extension, leaving your builder as just a collection of interfaces.
+
+_Why would you do this? What would you gain?_
+
+Who knows...
+
 I have not found any literature describing these recursive type-bound interfaces, and have only recently stumbled upon them myself.  These seem to blur the line between a class and an interface, and may prove themselves useful.  More research and experimentation will be needed.
+
+Maybe there's a value in having a common `setName` method, **_and_** in identifying different objects as implementing a `Nameable` interface.  Maybe there's a testing or UI component that only cares if a builder implements `Nameable` and possibly a collection of other interfaces.  
+Maybe your project has a lot of different Types with mostly overlapping fields, it could be easier to define interfaces for setters for collections of fields rather than re-implementing the setters for each builder.
+Maybe you need to build several variations of a builder with different field access for different use cases.
+
+There are many possible applications for these type-bound `Extension` interfaces.  In many places their use may only add extra complexity and not pan out.  But, there may be a few applications where they let us re-think our typical approaches to code organization.
+
