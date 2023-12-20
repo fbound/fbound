@@ -127,7 +127,7 @@ User user = new UserBuilder()
 
 Since I am hellbent on using them together, I can build better support into the `UserBuilder` with a lambda approach.  
 We'll add this method:
-```JAVA
+```java
     public UserBuilder buildName(Consumer<StringBuilder> consumer) {
         StringBuilder sb = new StringBuilder();
         consumer.accept(sb);
@@ -2506,8 +2506,7 @@ public class Roster {
 		}
 	}
 
-	public static class BaseBuilder<V,R> extends BuilderBase<Record,V,R, BaseBuilder<V,R>>
-			implements Accept<BaseBuilder<V,R>>, Apply<BaseBuilder<V,R>>, Edit<Record, BaseBuilder<V,R>> {
+	public static class BaseBuilder<V,R> extends BuilderBase<Record,V,R, BaseBuilder<V,R>> {
 		public BaseBuilder(BuilderOpts<Record,V,R> options) { super(options); }
 
 		public BaseBuilder<V,R> setName(String name) {
@@ -2878,3 +2877,160 @@ The `Effective Builder` viewed as an `FBound Builder` is a builder whose record 
 An `Effective Builder` can be safely and easily converted to an `FBound Builder` giving access to the full range of builder behaviors.
 
 ## Fun with Type-Bound Interfaces
+
+FBound has an empty marker class `Extension` with a very strange type parameter `B`:
+```java
+public interface Extension<B extends BuilderBase<?,?,?,B> & Extension<B>> { }
+```
+1. `B` is a `BuilderBase` of type `B`: `B extends BuilderBase<?,?,?,B>`
+2. `B` is an `Extension` of type `B`: `B extends Extension<B>`
+3. `B` is a `BuilderBase` and an `Extension`: `B extends BuilderBase & Extension`
+
+The `Extension` interface can only be implemented by a `BuilderBase` subtype, no other types will fit the type bounds for `B`.  Trying to use the interface with any other types will give you a compiler error.  
+The inverse is also true, any `Extension` must be a `BuilderBase`.  We can safely cast an `Extension<B>` to its base class `B`.  It is an interface that knows it is really a `BuilderBase`.
+
+### The `Accept` Extension
+"So, what can we do with this?" I hear you ask.  
+
+We can package up generic behaviors that can be added to builder like a `trait`.
+
+
+Way back at the beginning of this guide, we found that we can use a `Consumer` to compose one builder with another.
+```java
+    public RosterBuilder buildFacilitator(Consumer<FacilitatorBuilder> consumer) {
+        FacilitatorBuilder userBuilder = new FacilitatorBuilder();
+        consumer.accept(userBuilder);
+        roster.setFacilitator(userBuilder.finalizeUser());
+        return this;
+        }
+```
+This method lets us use a `FacilitatorBuilder` within the `RosterBuilder` for building the roster's facilitator.
+```java
+Roster roster = new RosterBuilder()
+        .setName("roster")
+        .buildFacilitator(f -> f
+            .setFacilitatorId("facilitatorId")
+            .setName("facilitator")
+            .setDate(date))
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m1")
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m2")
+        .finalizeRoster();
+```
+
+Rather than using a `Consumer` of another builder, what if we use a `Consumer` of our own builder type, and have the builder pass itself into the `Consumer`?
+
+Let's create an `accept` method and take a look.
+```java
+    public RosterBuilder accept(Consumer<RosterBuilder> consumer) {
+        consumer.accept(this);
+        return this;
+    }
+```
+We can do a couple nifty things with this method.
+
+First, we can create re-usable segments of fluent method calls.
+```java
+Roster roster1 = new RosterBuilder()
+        .setName("roster1")
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m1")
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m2")
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m3")
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m4")
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m5")
+        .finalizeRoster();
+
+Roster roster2 = new RosterBuilder()
+        .setName("roster2")
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m1")
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m2")
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m3")
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m4")
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m5")
+        .finalizeRoster();
+```
+Suppose we need to create many `Rosters` and want to add the same set of `Memberships` to each one.  We can use a `Consumer` to replace the duplication.
+```java
+Consumer<RosterBuilder> memberships = rb -> rb
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m1")
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m2")
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m3")
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m4")
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m5");
+
+Roster roster1 = new RosterBuilder().setName("roster1").accept(memberships).finalizeRoster();
+Roster roster2 = new RosterBuilder().setName("roster2").accept(memberships).finalizeRoster();
+```
+
+The other use of a `Consumer` as an _escape-hatch_ in a fluent API.  It allows you to break out of the fluent method chaining when other code is needed and then return to the method chaining.
+A common complaint against fluent APIs is a difficulty of adding logging statements or branching logic.  We can do that with a `Consumer`:
+```java
+Roster roster1 = new RosterBuilder()
+        .setName("roster1")
+        .accept(rb -> logger.info("Hello!"))
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m1")
+        .addMembership().groupId("g1").cohortId("c1").membershipId("m2")
+        .accept(rb -> {
+            if(x < 5){
+                rb.addMembership().groupId("g1").cohortId("c1").membershipId("m3")
+            }
+        })
+        .finalizeRoster();
+```
+
+Our `accept` method can be quite useful.  Useful enough that we may want to add it to other builders.
+
+This brings us back to `Extension`.  Instead of copying the `accept` method to another builder, we can make an `Accept` extension:
+```java
+public interface Accept<B extends BuilderBase<?,?,?,B> & Accept<B>> extends Extension<B> {
+	default public B accept(Consumer<B> consumer) {
+		consumer.accept((B)this);
+		return (B)this;
+	}
+}
+```
+
+We can add this to our `User.Builder` and it will be only available in that one `Builder`, no other `User` or `Facilitator` builder types.
+```java
+public static class Builder extends BaseBuilder<Record,User,User,Builder> implements Accept<Builder> {
+    ...
+}
+```
+Our `User.Builder` now has the `accept` method.
+
+Or, we can add this to our `User.BaseBuilder` where it will be available in the 4 `User` builder subtypes as well as the `Facilitator` builders.
+```java
+public class User {
+    public static class BaseBuilder<T extends Record, V, R, B extends BaseBuilder<T,V,R,B>> extends BuilderBase<T,V,R,B> 
+            implements Accept<B> {
+        ...
+    }
+}
+```
+And now all `User` and `Facilitator` builders have the `accept` method.
+
+> Note:   
+> Extensions do not play well with F-lower-bounded polymorphism we've been using (`B extends BuilderBase<? super B>`), we will need to use regular F-Bounded polymorphism (`B extends BuilderBase<B>`).  We will have to drop the `? super` from our `User.BaseBuilder` and `Facilitator.BaseBuilder`.  
+> This was not a problem with the `User.Builder` since it does not have a lower-bounded constraint `? super` directly in its type definition.
+> 
+> This could be a good reason to avoid F-lower-bounded polymorphism in favor of F-bounded polymorphism unless otherwise needed.
+
+Along with the `Accept` extension, FBound defines an `Edit` extension which takes a `Consumer<T>` allowing direct access to the `record` instance.
+```java
+public interface Edit<T,B extends BuilderBase<T,?,?,B> & Edit<T,B>> extends Extension<B> {
+    default B edit(Consumer<T> consumer) {
+        consumer.accept(((B)this).instanceRef.get());
+        return (B)this;
+    }
+}
+```
+
+And, because Java allows multiple interfaces, we can add both `Accept` and `Edit`:
+```java
+public static class Builder extends BaseBuilder<Record,User,User,Builder> 
+        implements Accept<Builder>, Edit<Record,Builder> {
+    ...
+}
+```
+Giving our builder both the `accept` and `edit` methods.
+
+I have not found any literature describing these recursive type-bound interfaces, and have only recently stumbled upon them myself.  These seem to blur the line between a class and an interface, and may prove themselves useful.  More research and experimentation will be needed.
