@@ -406,7 +406,7 @@ User user =  new UserBuilder()
 ```
 Right as the Chapagne was being opened, the celebrating was interrupted by an `Exception`.  Someone forgot to set a `cohortId` when building a `Membership` and the program crashed.
 
-## Fluent State-Based Builder - MembershipBuild
+## Fluent State-Based Builder - MembershipBuilder
 We want to change the API to ensure all three ids are set.
 
 Instead of one Builder with three methods, we can make three Builders with one method each.  
@@ -2882,12 +2882,15 @@ FBound has an empty marker class `Extension` with a very strange type parameter 
 ```java
 public interface Extension<B extends BuilderBase<?,?,?,B> & Extension<B>> { }
 ```
-1. `B` is a `BuilderBase` of type `B`: `B extends BuilderBase<?,?,?,B>`
-2. `B` is an `Extension` of type `B`: `B extends Extension<B>`
-3. `B` is a `BuilderBase` and an `Extension`: `B extends BuilderBase & Extension`
+1. `Extension` has a single type parameter `B`
+2. `B` is a `BuilderBase` of type `B`: `B extends BuilderBase<?,?,?,B>`
+3. `B` is an `Extension` of type `B`: `B extends Extension<B>`
+4. `B` is a `BuilderBase` and an `Extension`: `B extends BuilderBase & Extension`
 
 The `Extension` interface can only be implemented by a `BuilderBase` subtype, no other types will fit the type bounds for `B`.  Trying to use the interface with any other types will give you a compiler error.  
-The inverse is also true, any `Extension` must be a `BuilderBase`.  We can safely cast an `Extension<B>` to its base class `B`.  It is an interface that knows it is really a `BuilderBase`.
+The inverse is also true, any `Extension` must be a `BuilderBase`.  We can safely cast an `Extension<B>` to its base class `B`.  It is an interface that knows it is really a `BuilderBase`.  
+Since it knows and can be cast to its base class, the `Extension` is an interface that has access to the state its base class.  With this access, we can do a lot more using only `default` interfaces methods.
+
 
 ### The `Accept` Extension
 "So, what can we do with this?" I hear you ask.  
@@ -3041,7 +3044,7 @@ public static <T,B extends BuilderBase<T, ?, ?, B> & Extension<B>> T instance(Ex
 
 Through these `ExtensionUtil` methods, the `Extension` interface effectively changes the access control of the builder fields.  This empowers others to create custom `Extension` with the same privileges as the FBound project itself.
 
-### Extensions wrap-up
+### Final thoughts on Extensions
 Because Java allows multiple interfaces, we can add both `Accept` and `Edit`:
 ```java
 public static class Builder extends BaseBuilder<Record,User,User,Builder> 
@@ -3069,4 +3072,3 @@ Maybe your project has a lot of different Types with mostly overlapping fields, 
 Maybe you need to build several variations of a builder with different field access for different use cases.
 
 There are many possible applications for these type-bound `Extension` interfaces.  In many places their use may only add extra complexity and not pan out.  But, there may be a few applications where they let us re-think our typical approaches to code organization.
-
